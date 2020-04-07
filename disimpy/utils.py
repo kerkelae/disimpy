@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
-"""This module contains various useful functions."""
+"""This module contains useful functions."""
 
 def show_traj(traj_file, title=None, show=True):
     """Visualize walker trajectories in a trajectories file.

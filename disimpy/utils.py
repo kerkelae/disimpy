@@ -39,6 +39,9 @@ def show_traj(traj_file, title=None, show=True):
     ax.set_xlabel('x')
     ax.set_ylabel('y')
     ax.set_zlabel('z')
+    ax.set_xlim([-np.max(np.abs(trajectories)),np.max(np.abs(trajectories))])
+    ax.set_ylim([-np.max(np.abs(trajectories)),np.max(np.abs(trajectories))])
+    ax.set_zlim([-np.max(np.abs(trajectories)),np.max(np.abs(trajectories))])
     ax.ticklabel_format(style='sci', scilimits=(0, 0))
     if show:
         plt.show()

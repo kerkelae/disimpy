@@ -9,8 +9,8 @@ from numba.cuda.random import (create_xoroshiro128p_states,
 
 """This module contains code for running diffusion MRI simulations."""
 
-MAX_ITER = 1e4
-EPSILON = 1e-15
+MAX_ITER = 1e6
+EPSILON = 1e-10
 GAMMA = 267.513e6
 
 @cuda.jit(device=True)
@@ -56,8 +56,8 @@ def cuda_step_free(positions, g_x, g_y, g_z, phases, rng_states, t, n_spins,
     return
 
 @cuda.jit(device=True)
-def cuda_vector_rotation(v, R):
-    """Apply 3 by 3 rotation matrix R on vector v of length 3."""
+def cuda_mat_mul(v, R):
+    """Multiply vector v of length 3 by a 3 by 3 matrix R."""
     rotated_v = cuda.local.array(3, numba.double)
     rotated_v[0] = R[0, 0]*v[0]+R[0, 1]*v[1]+R[0, 2]*v[2]
     rotated_v[1] = R[1, 0]*v[0]+R[1, 1]*v[1]+R[1, 2]*v[2]
@@ -84,10 +84,12 @@ def cuda_line_sphere_intersection(r0, step, radius):
 
 @cuda.jit(device=True)
 def cuda_line_ellipsoid_intersection(r0, step, a, b, c):
-    """Calculate distance from r0 to ellipsoid along step."""
-    # To be implemented
-    1 + 1
-    return 
+    """Calculate distance from r0 to axis aligned ellipsoid along step."""
+    A = (step[0]/a)**2+(step[1]/b)**2+(step[2]/c)**2
+    B = 2*(a**(-2)*step[0]*r0[0]+b**(-2)*step[1]*r0[1]+c**(-2)*step[2]*r0[2])
+    C = (r0[0]/a)**2+(r0[1]/b)**2+(r0[2]/c)**2 - 1
+    d = (-B+math.sqrt(B**2-4*A*C))/(2*A)
+    return d
 
 @numba.jit(nopython=True)
 def cuda_reflection(r0, step, d, normal):
@@ -141,12 +143,34 @@ def fill_uniformly_sphere(n, radius, seed=123):
                 filled = True
     return points
 
-def initial_positions_cylinder(n_spins, radius, orientation, seed=123):
+@numba.jit(nopython=True)
+def fill_uniformly_ellipsoid(n, a, b, c, seed=123):
+    """Sample n random points inside an ellipsoid with principal semi-axes a, b,
+       and c."""
+    np.random.seed(seed)
+    filled = False
+    i = 0
+    points = np.zeros((n, 3))
+    while not filled:
+        p = (np.random.random(3)-.5)*2*np.array([a, b, c])
+        if np.sum((p/np.array([a, b, c]))**2) < 1:
+            points[i] = p
+            i += 1
+            if i == n:
+                filled = True
+    return points
+
+def initial_positions_cylinder(n_spins, radius, R_inv, seed=123):
     """Calculate positions for spins in a cylinder"""
     positions = np.zeros((n_spins, 3))
     positions[:, 1:3] = fill_uniformly_circle(n_spins, radius, seed)
-    R = vec2vec_rotmat(np.array([1, 0, 0]), orientation)
-    positions = np.matmul(R, positions.T).T
+    positions = np.matmul(R_inv, positions.T).T
+    return positions
+
+def initial_positions_ellipsoid(n_spins, a, b, c, R_inv, seed=123):
+    """Calculate positions for spins in a cylinder"""
+    positions = fill_uniformly_ellipsoid(n_spins, a, b, c, seed)
+    positions = np.matmul(R_inv, positions.T).T
     return positions
 
 @cuda.jit()
@@ -192,8 +216,8 @@ def cuda_step_cylinder(positions, g_x, g_y, g_z, phases, rng_states, t, n_spins,
     step = cuda.local.array(3, numba.double)
     cuda_random_step(step, rng_states, thread_id)
     r0 = positions[thread_id, :]
-    cuda_vector_rotation(step, R)
-    cuda_vector_rotation(r0, R)
+    cuda_mat_mul(step, R)
+    cuda_mat_mul(r0, R)
     idx = 0
     check_intersection = True
     while check_intersection and idx < MAX_ITER:
@@ -209,8 +233,8 @@ def cuda_step_cylinder(positions, g_x, g_y, g_z, phases, rng_states, t, n_spins,
             step_l -= d
         else:
             check_intersection = False    
-    cuda_vector_rotation(step, R_inv)
-    cuda_vector_rotation(r0, R_inv)   
+    cuda_mat_mul(step, R_inv)
+    cuda_mat_mul(r0, R_inv)   
     for i in range(3):
         positions[thread_id, i] = positions[thread_id, i] + step[i]*step_l
     for m in range(g_x.shape[0]):
@@ -222,10 +246,40 @@ def cuda_step_cylinder(positions, g_x, g_y, g_z, phases, rng_states, t, n_spins,
 
 @cuda.jit()
 def cuda_step_ellipsoid(positions, g_x, g_y, g_z, phases, rng_states, t,
-                        n_spins, gamma, step_l, dt, radius):
+                        n_spins, gamma, step_l, dt, a, b, c, R, R_inv):
     """Kernel function for diffusion inside an ellipsoid."""
-    # To be implemented
-    1 + 1
+    thread_id = cuda.grid(1)
+    if thread_id >= positions.shape[0]:
+        return
+    step = cuda.local.array(3, numba.double)
+    cuda_random_step(step, rng_states, thread_id)
+    r0 = positions[thread_id, :]
+    cuda_mat_mul(step, R)
+    cuda_mat_mul(r0, R)
+    idx = 0
+    check_intersection = True
+    while check_intersection and idx < MAX_ITER:
+        idx += 1
+        d = cuda_line_ellipsoid_intersection(r0, step, a, b, c)
+        if d > 0 and d < step_l:
+            normal = cuda.local.array(3, numba.double)
+            normal[0] = -(r0[0]+d*step[0])/a**2
+            normal[1] = -(r0[1]+d*step[1])/b**2
+            normal[2] = -(r0[2]+d*step[2])/c**2
+            cuda_normalize_vector(normal)
+            cuda_reflection(r0, step, d, normal)
+            step_l -= d
+        else:
+            check_intersection = False    
+    cuda_mat_mul(step, R_inv)
+    cuda_mat_mul(r0, R_inv)   
+    for i in range(3):
+        positions[thread_id, i] = positions[thread_id, i] + step[i]*step_l
+    for m in range(g_x.shape[0]):
+        phases[m, thread_id] += (gamma*dt*
+                                 ((g_x[m, t]*positions[thread_id, 0])
+                                  +(g_y[m, t]*positions[thread_id, 1])
+                                  +(g_z[m, t]*positions[thread_id, 2])))
     return
 
 def simulation(n_spins, diffusivity, gradient, dt, substrate,
@@ -295,10 +349,13 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate,
     elif substrate['type'] == 'cylinder':
         radius = substrate['radius']
         orientation = substrate['orientation']
-        R = vec2vec_rotmat(orientation, np.array([1,0,0]))
+        orientation /= np.linalg.norm(orientation)
+        default_orientation = np.array([1,0,0])
+        R = vec2vec_rotmat(orientation, 
+                           default_orientation)
         R_inv = np.linalg.inv(R)
-        positions = initial_positions_cylinder(n_spins, radius, orientation,
-                                               seed)
+        #R_inv = vec2vec_rotmat(np.array([1,0,0]), orientation)
+        positions = initial_positions_cylinder(n_spins, radius, R_inv, seed)
         if trajectories:
             with open(trajectories, 'w') as f:
                 [f.write(str(i)+' ') for i in positions.ravel()]
@@ -331,6 +388,32 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate,
             cuda_step_sphere[gs, bs, stream](d_positions, d_g_x, d_g_y, 
                                              d_g_z, d_phases, rng_states, t,
                                              n_spins, GAMMA, step_l, dt, radius)
+            stream.synchronize()
+            if trajectories:  # Update trajectories file
+                positions = d_positions.copy_to_host(stream=stream)
+                with open(trajectories, 'a') as f:
+                    [f.write(str(i)+' ') for i in positions.ravel()]
+                    f.write('\n')
+            print(str(np.round((t/gradient.shape[1])*100, 0))+' %', end="\r")
+            
+    elif substrate['type'] == 'ellipsoid':
+        a = substrate['a']
+        b = substrate['b']
+        c = substrate['c']
+        R = substrate['R']
+        R_inv = np.linalg.inv(R)
+        positions = initial_positions_ellipsoid(n_spins, a, b, c, R_inv)
+        if trajectories:
+            with open(trajectories, 'w') as f:
+                [f.write(str(i)+' ') for i in positions.ravel()]
+                f.write('\n')
+        d_positions = cuda.to_device(np.ascontiguousarray(positions),
+                                     stream=stream)        
+        for t in range(1, gradient.shape[1]):
+            cuda_step_ellipsoid[gs, bs, stream](d_positions, d_g_x, d_g_y, 
+                                                d_g_z, d_phases, rng_states, t,
+                                                n_spins, GAMMA, step_l, dt, a,
+                                                b, c, R, R_inv)
             stream.synchronize()
             if trajectories:  # Update trajectories file
                 positions = d_positions.copy_to_host(stream=stream)

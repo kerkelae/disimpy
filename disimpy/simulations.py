@@ -348,7 +348,7 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate,
             
     elif substrate['type'] == 'cylinder':
         radius = substrate['radius']
-        orientation = substrate['orientation']
+        orientation = substrate['orientation'].astype(np.float)
         orientation /= np.linalg.norm(orientation)
         default_orientation = np.array([1,0,0])
         R = vec2vec_rotmat(orientation, 

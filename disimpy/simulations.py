@@ -283,7 +283,7 @@ def cuda_step_ellipsoid(positions, g_x, g_y, g_z, phases, rng_states, t,
     return
 
 def simulation(n_spins, diffusivity, gradient, dt, substrate,
-               seed=123, trajectories=None):
+               seed=123, trajectories=None, quiet=False):
     """Run dMRI simulation.
     
     Parameters
@@ -303,6 +303,8 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate,
     trajectories : str, optional
         Path to file in which to save trajectories. Resulting file can be very
         large!
+    quiet : bool, optional
+        Define whether to print simulation progression.
         
     Returns
     -------
@@ -310,7 +312,8 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate,
         Simulated signal.
     """
     step_l = np.sqrt(6*diffusivity*dt)
-    print('Initiating simulation. Step length = %.2E' % Decimal(step_l))
+    if not quiet:
+        print('Initiating simulation. Step length = %.2E' % Decimal(step_l))
     # Set up cuda stream and device arrays
     bs = 512 # Block size
     gs = int(math.ceil(float(n_spins) / bs)) # Grid size
@@ -344,7 +347,8 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate,
                 with open(trajectories, 'a') as f:
                     [f.write(str(i)+' ') for i in positions.ravel()]
                     f.write('\n')
-            print(str(np.round((t/gradient.shape[1])*100, 0))+' %', end="\r")
+            if not quiet:
+                print(str(np.round((t/gradient.shape[1])*100, 0))+' %', end="\r")
             
     elif substrate['type'] == 'cylinder':
         radius = substrate['radius']
@@ -373,7 +377,8 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate,
                 with open(trajectories, 'a') as f:
                     [f.write(str(i)+' ') for i in positions.ravel()]
                     f.write('\n')
-            print(str(np.round((t/gradient.shape[1])*100, 0))+' %', end="\r")
+            if not quiet:
+                print(str(np.round((t/gradient.shape[1])*100, 0))+' %', end="\r")
             
     elif substrate['type'] == 'sphere':
         radius = substrate['radius']
@@ -394,7 +399,8 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate,
                 with open(trajectories, 'a') as f:
                     [f.write(str(i)+' ') for i in positions.ravel()]
                     f.write('\n')
-            print(str(np.round((t/gradient.shape[1])*100, 0))+' %', end="\r")
+            if not quiet:
+                print(str(np.round((t/gradient.shape[1])*100, 0))+' %', end="\r")
             
     elif substrate['type'] == 'ellipsoid':
         a = substrate['a']
@@ -420,12 +426,14 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate,
                 with open(trajectories, 'a') as f:
                     [f.write(str(i)+' ') for i in positions.ravel()]
                     f.write('\n')
-            print(str(np.round((t/gradient.shape[1])*100, 0))+' %', end="\r")
+            if not quiet:
+                print(str(np.round((t/gradient.shape[1])*100, 0))+' %', end="\r")
             
     else:
         raise Exception("Please specify substrate correctly.")
         
     phases = d_phases.copy_to_host(stream=stream)
     signals = np.real(np.sum(np.exp(1j*phases), axis=1))
-    print('Simulation finished.')
+    if not quiet:
+        print('Simulation finished.')
     return signals

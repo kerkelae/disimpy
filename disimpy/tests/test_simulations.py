@@ -1,3 +1,5 @@
+"""This module contains unit tests of the simulations module."""
+
 import os
 import math
 import numba
@@ -10,6 +12,7 @@ from numba.cuda.random import (create_xoroshiro128p_states,
 
 from .. import simulations, gradients, utils
 
+
 def load_example_gradient():
     """Helper function for loading a gradient array."""
     gradient_file = os.path.join(os.path.dirname(os.path.abspath(__file__)),
@@ -17,61 +20,159 @@ def load_example_gradient():
     gradient = np.loadtxt(gradient_file)[np.newaxis,:,:]
     return gradient
     
-def test_step_generation():
-    """Test that steps are sampled correctly."""
     
+def test_cuda_dot_product():
+    
+    @cuda.jit()
+    def test_kernel(a, b, dp):
+        thread_id = cuda.grid(1)
+        if thread_id >= a.shape[0]:
+            return
+        dp[thread_id] = simulations.cuda_dot_product(a[thread_id, :],
+                                                     b[thread_id, :])
+        return
+    
+    a = np.array([1.2, 5, 3])[np.newaxis, :]
+    b = np.array([1, 3.5, -8])[np.newaxis, :]
+    dp = np.zeros(1)
+    stream = cuda.stream()
+    test_kernel[1, 256, stream](a, b, dp)
+    stream.synchronize()    
+    npt.assert_almost_equal(dp[0], np.dot(a[0], b[0]))   
+    
+
+def test_cuda_normalize_vector():
+
+    @cuda.jit()
+    def test_kernel(a):
+        thread_id = cuda.grid(1)
+        if thread_id >= a.shape[0]:
+            return
+        simulations.cuda_normalize_vector(a[thread_id, :])
+        return
+    
+    a = np.array([1.2, -5, 3])[np.newaxis, :]
+    desired_a = a / np.linalg.norm(a)
+    stream = cuda.stream()
+    test_kernel[1, 256, stream](a)
+    stream.synchronize()    
+    npt.assert_almost_equal(a, desired_a)   
+    
+
+def test_cuda_random_step():
+
     @cuda.jit()
     def test_kernel(steps, rng_states):
         thread_id = cuda.grid(1)
         if thread_id >= steps.shape[0]:
             return
-        step = cuda.local.array(3, numba.double)
-        simulations.cuda_random_step(step, rng_states, thread_id)
-        steps[thread_id, 0] = step[0]
-        steps[thread_id, 1] = step[1]
-        steps[thread_id, 2] = step[2]
+        simulations.cuda_random_step(steps[thread_id, :], rng_states, thread_id)
         return
-
-    # Define simulation size
-    N = int(1e6)
-    seed = 12345
-    steps = np.zeros((N, 3))
+    
+    N = int(1e5)
+    seeds = [12345, 12345, 123, 1]
+    steps = np.zeros((4, N, 3))
     block_size = 256
     grid_size = int(math.ceil(N/block_size))
+    for i, seed in enumerate(seeds):
+        stream = cuda.stream()
+        rng_states = create_xoroshiro128p_states(grid_size*block_size,
+                                                 seed=seed,
+                                                 stream=stream)
+        test_kernel[grid_size, block_size, stream](steps[i, :, :], rng_states)
+        stream.synchronize()
+    npt.assert_equal(steps[0], steps[1])
+    npt.assert_equal(np.all(steps[0] != steps[2]), True)
+    npt.assert_almost_equal(np.mean(np.sum(steps[1::]/N, axis=1)), 0, 3)
+    
+
+def test_cuda_mat_mul():
+    
+    @cuda.jit()
+    def test_kernel(a, R):
+        thread_id = cuda.grid(1)
+        if thread_id >= a.shape[0]:
+            return
+        simulations.cuda_mat_mul(a[thread_id, :], R)
+        return
+    
+    a = np.array([1.0, 0, 0])[np.newaxis, :]  # Original direction
+    b = np.array([0.20272312, 0.06456846, 0.97710504])  # Desired direction
+    R = np.array([[0.20272312, -0.06456846, -0.97710504],
+                  [0.06456846, 0.99653363, -0.0524561],
+                  [0.97710504, -0.0524561, 0.20618949]])  # Rotation matrix
     stream = cuda.stream()
-    # Run three simulations with different seeds
-    # Seed 1
-    rng_states = create_xoroshiro128p_states(grid_size*block_size,
-                                             seed=seed,
-                                             stream=stream)
-    d_steps = cuda.to_device(np.ascontiguousarray(steps), stream=stream)
-    test_kernel[grid_size, block_size, stream](d_steps, rng_states)
-    steps_1 = d_steps.copy_to_host(stream=stream)
+    test_kernel[1, 256, stream](a, R)
     stream.synchronize()    
-    # Seed 2 (= seed 1)
+    npt.assert_almost_equal(a[0], b)  
+    
+    
+def test_cuda_line_circle_intersection():
+    
+    @cuda.jit()
+    def test_kernel(d, r0, step, radius):
+        thread_id = cuda.grid(1)
+        if thread_id >= r0.shape[0]:
+            return
+        d[thread_id] = simulations.cuda_line_circle_intersection(
+            r0[thread_id, :], step, radius)
+        return
+    
+    d = np.zeros(1)
+    r0 = np.array([-.1, -.1])[np.newaxis, :]
+    step = np.array([1.0, 1])
+    step /= np.linalg.norm(step)
+    radius = 1.0
     stream = cuda.stream()
-    rng_states = create_xoroshiro128p_states(grid_size*block_size,
-                                             seed=seed,
-                                             stream=stream)
-    d_steps = cuda.to_device(np.ascontiguousarray(steps), stream=stream)
-    test_kernel[grid_size, block_size, stream](d_steps, rng_states)
-    steps_2 = d_steps.copy_to_host(stream=stream)
+    test_kernel[1, 256, stream](d, r0, step, radius)
     stream.synchronize()    
-    # Seed 3 (!= seed 1)
+    npt.assert_almost_equal(d[0], 1.1414213562373097)    
+    
+    
+def test_cuda_line_sphere_intersection():
+    
+    @cuda.jit()
+    def test_kernel(d, r0, step, radius):
+        thread_id = cuda.grid(1)
+        if thread_id >= r0.shape[0]:
+            return
+        d[thread_id] = simulations.cuda_line_sphere_intersection(
+            r0[thread_id, :], step, radius)
+        return
+    
+    d = np.zeros(1)
+    r0 = np.array([-.1, -.1, 0])[np.newaxis, :]
+    step = np.array([1.0, 1, 0])
+    step /= np.linalg.norm(step)
+    radius = 1.0
     stream = cuda.stream()
-    seed = 54321
-    rng_states = create_xoroshiro128p_states(grid_size*block_size,
-                                             seed=seed,
-                                             stream=stream)
-    d_steps = cuda.to_device(np.ascontiguousarray(steps), stream=stream)
-    test_kernel[grid_size, block_size, stream](d_steps, rng_states)
-    steps_3 = d_steps.copy_to_host(stream=stream)
+    test_kernel[1, 256, stream](d, r0, step, radius)
     stream.synchronize()    
-    # Assert that estimates aren't biased and that seed setting works
-    npt.assert_almost_equal(np.sum(steps_1/N, axis=0), 0, 2)
-    npt.assert_almost_equal(np.sum(steps_2/N, axis=0), 0, 2)
-    npt.assert_almost_equal(np.sum(steps_3/N, axis=0), 0, 2)
-    npt.assert_equal(steps_1, steps_2)
+    npt.assert_almost_equal(d[0], 1.1414213562373097)     
+    
+    
+def test_cuda_line_ellipsoid_intersection():
+    
+    @cuda.jit()
+    def test_kernel(d, r0, step, a, b, c):
+        thread_id = cuda.grid(1)
+        if thread_id >= r0.shape[0]:
+            return
+        d[thread_id] = simulations.cuda_line_ellipsoid_intersection(
+            r0[thread_id, :], step, a, b, c)
+        return
+    
+    d = np.zeros(1)
+    r0 = np.array([-.1, -.1, 0])[np.newaxis, :]
+    step = np.array([1.0, 1, 0])
+    step /= np.linalg.norm(step)
+    a, b, c = 1.0, 1.0, 1.0
+    stream = cuda.stream()
+    test_kernel[1, 256, stream](d, r0, step, a, b, c)
+    stream.synchronize()    
+    npt.assert_almost_equal(d[0], 1.1414213562373097)  
+    
+def test_cuda_reflection():
     return
     
 def test_fill_uniformly_circle():

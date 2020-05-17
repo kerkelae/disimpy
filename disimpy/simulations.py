@@ -37,24 +37,6 @@ def cuda_random_step(step, rng_states, thread_id):
     cuda_normalize_vector(step)
     return
 
-@cuda.jit()
-def cuda_step_free(positions, g_x, g_y, g_z, phases, rng_states, t, n_spins,
-                   gamma, step_l, dt):
-    """Kernel function for free diffusion."""
-    thread_id = cuda.grid(1)
-    if thread_id >= positions.shape[0]:
-        return
-    step = cuda.local.array(3, numba.double)
-    cuda_random_step(step, rng_states, thread_id)
-    for i in range(3):
-        positions[thread_id, i] = positions[thread_id, i] + step[i]*step_l
-    for m in range(g_x.shape[0]):
-        phases[m, thread_id] += (gamma*dt*
-                                 ((g_x[m, t]*positions[thread_id, 0])
-                                  +(g_y[m, t]*positions[thread_id, 1])
-                                  +(g_z[m, t]*positions[thread_id, 2])))    
-    return
-
 @cuda.jit(device=True)
 def cuda_mat_mul(v, R):
     """Multiply vector v of length 3 by a 3 by 3 matrix R."""
@@ -68,7 +50,7 @@ def cuda_mat_mul(v, R):
 
 @cuda.jit(device=True)
 def cuda_line_circle_intersection(r0, step, radius):
-    """Calculate distance from r0 to circle along step."""
+    """Calculate distance from r0 to circle centered at origin along step."""
     a = step[0]**2+step[1]**2
     b = 2*(r0[0]*step[0]+r0[1]*step[1])
     c = r0[0]**2+r0[1]**2-radius**2
@@ -77,14 +59,15 @@ def cuda_line_circle_intersection(r0, step, radius):
 
 @cuda.jit(device=True)
 def cuda_line_sphere_intersection(r0, step, radius):
-    """Calculate distance from r0 to sphere along step."""
+    """Calculate distance from r0 to sphere centered at origin along step."""
     dp = cuda_dot_product(step, r0)
     d = -dp + math.sqrt(dp**2 - (cuda_dot_product(r0, r0)-radius**2))
     return d
 
 @cuda.jit(device=True)
 def cuda_line_ellipsoid_intersection(r0, step, a, b, c):
-    """Calculate distance from r0 to axis aligned ellipsoid along step."""
+    """Calculate distance from r0 to axis aligned ellipsoid centered at origin
+       along step."""
     A = (step[0]/a)**2+(step[1]/b)**2+(step[2]/c)**2
     B = 2*(a**(-2)*step[0]*r0[0]+b**(-2)*step[1]*r0[1]+c**(-2)*step[2]*r0[2])
     C = (r0[0]/a)**2+(r0[1]/b)**2+(r0[2]/c)**2 - 1
@@ -172,6 +155,25 @@ def initial_positions_ellipsoid(n_spins, a, b, c, R_inv, seed=123):
     positions = fill_uniformly_ellipsoid(n_spins, a, b, c, seed)
     positions = np.matmul(R_inv, positions.T).T
     return positions
+
+
+@cuda.jit()
+def cuda_step_free(positions, g_x, g_y, g_z, phases, rng_states, t, n_spins,
+                   gamma, step_l, dt):
+    """Kernel function for free diffusion."""
+    thread_id = cuda.grid(1)
+    if thread_id >= positions.shape[0]:
+        return
+    step = cuda.local.array(3, numba.double)
+    cuda_random_step(step, rng_states, thread_id)
+    for i in range(3):
+        positions[thread_id, i] = positions[thread_id, i] + step[i]*step_l
+    for m in range(g_x.shape[0]):
+        phases[m, thread_id] += (gamma*dt*
+                                 ((g_x[m, t]*positions[thread_id, 0])
+                                  +(g_y[m, t]*positions[thread_id, 1])
+                                  +(g_z[m, t]*positions[thread_id, 2])))    
+    return
 
 @cuda.jit()
 def cuda_step_sphere(positions, g_x, g_y, g_z, phases, rng_states, t, n_spins,

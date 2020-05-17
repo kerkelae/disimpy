@@ -1,3 +1,5 @@
+"""This module contains code for executing diffusion MRI simulations."""
+
 import math
 import numba
 import numpy as np
@@ -6,8 +8,6 @@ from decimal import Decimal
 from dipy.core.geometry import vec2vec_rotmat
 from numba.cuda.random import (create_xoroshiro128p_states,
                                xoroshiro128p_normal_float64)
-
-"""This module contains code for running diffusion MRI simulations."""
 
 MAX_ITER = 1e6
 EPSILON = 1e-10

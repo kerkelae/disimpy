@@ -1,11 +1,19 @@
 """This module contains unit tests of the utils module."""
 
 import os
+import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy.testing as npt
 
 from .. import utils
+
+
+def test_vec2vec_rotmat():
+    a = np.array([1, 0, 0])
+    for b in np.array([[0, 0, 1], [-1, 0, 0], [1, 0, 0]]):
+        R = utils.vec2vec_rotmat(a, b)
+        assert_array_almost_equal(np.dot(R, a), b)
 
 
 def test_show_traj():

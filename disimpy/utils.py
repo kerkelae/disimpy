@@ -5,6 +5,36 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
 
+def vec2vec_rotmat(v, k):
+    """Return rotation matrix defining a rotation that aligns v with k.
+    
+    Parameters
+    -----------
+    v : array_like
+        3D vector.
+    k : array_like
+        3D vector.
+
+    Returns
+    ---------
+    R : ndarray
+        3 by 3 rotation matrix.
+    """
+    axis = np.cross(v, k).astype(np.float)
+    axis /= np.linalg.norm(axis)
+    angle = np.arcsin(np.linalg.norm(np.cross(v, k)) /
+                      (np.linalg.norm(k) * np.linalg.norm(v)))
+    if np.dot(v, k) < 0:
+        angle = np.pi - angle
+    K = np.array([[0, -axis[2], axis[1]],
+                  [axis[2], 0, -axis[0]],
+                  [-axis[1], axis[0], 0]])
+    R = np.eye(3) + \
+        np.sin(angle) * K + \
+        (1 - np.cos(angle)) * np.matmul(K, K)  # Rodrigues' rotation formula
+    return R
+
+
 def show_traj(traj_file, title=None, show=True):
     """Visualize walker trajectories in a trajectories file.
 

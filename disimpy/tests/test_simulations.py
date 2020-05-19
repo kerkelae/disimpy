@@ -243,7 +243,7 @@ def test_free_diffusion():
     n_m = int(1e2)
     diffusivity = 2e-9
     gradient = load_example_gradient()
-    bs = np.linspace(0, 3e9, n_m)
+    bs = np.linspace(1, 3e9, n_m)
     gradient = np.concatenate([gradient for i in range(n_m)], axis=0)
     diffusivity = 2e-9
     dt = 80e-3 / (gradient.shape[1] - 1)

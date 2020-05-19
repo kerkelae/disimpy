@@ -14,11 +14,12 @@ from .. import simulations, gradients, utils
 
 
 def load_example_gradient():
-    """Helper function for loading a gradient array."""
+    T = 80e-3  # Duration of gradient array
     gradient_file = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                  'example_gradient.txt')
     gradient = np.loadtxt(gradient_file)[np.newaxis, :, :]
-    return gradient
+    dt = T / (gradient.shape[1] - 1)
+    return gradient, dt
 
 
 def test_cuda_dot_product():
@@ -242,11 +243,10 @@ def test_free_diffusion():
     n_t = int(1e3)
     n_m = int(1e2)
     diffusivity = 2e-9
-    gradient = load_example_gradient()
+    gradient, dt = load_example_gradient()
     bs = np.linspace(1, 3e9, n_m)
     gradient = np.concatenate([gradient for i in range(n_m)], axis=0)
     diffusivity = 2e-9
-    dt = 80e-3 / (gradient.shape[1] - 1)
     gradient, dt = gradients.interpolate_gradient(gradient, dt, n_t)
     gradient = gradients.set_b(gradient, dt, bs)
     substrate = {'type': 'free'}
@@ -270,16 +270,14 @@ def test_free_diffusion():
 
 def test_cylinder_diffusion():
 
-    # Define simulation parameters
-    n_s = int(1e3)  # Number of random walkers
-    n_t = int(1e3)  # Number of time points
-    bs = np.linspace(0, 3e9, 1000)  # b-values
-    diffusivity = 2e-9  # In units of m^2/s
+    n_s = int(1e4)  # Possibly increase later
+    n_t = int(1e3)
+    n_m = 50
+    bs = np.linspace(1, 3e9, n_m)
+    diffusivity = 2e-9
 
     # Define gradient array
-    gradient = load_example_gradient()
-    T = 80e-3  # Gradient duration
-    dt = T / (gradient.shape[1] - 1)  # Timestep duration
+    gradient, dt = load_example_gradient()
     gradient = np.concatenate([gradient for i in range(len(bs))], axis=0)
     gradient, dt = gradients.interpolate_gradient(gradient, dt, n_t)
     gradient[gradient > 1e-4] = 1
@@ -289,7 +287,7 @@ def test_cylinder_diffusion():
     DELTA = np.min(np.where(gradient[-1, :, 0] < 0)) * dt
     max_Gs = np.max(np.linalg.norm(gradient, axis=2), axis=1)
 
-    # Add 6 more directions to use in tests
+    # Add 6 more directions to use in these tests
     phi = (1 + np.sqrt(5)) / 2
     directions = np.array([[0, 1, phi],
                            [0, 1, -phi],
@@ -305,33 +303,39 @@ def test_cylinder_diffusion():
                 base_gradient, Rs)), axis=0)
     bvecs = np.concatenate((np.vstack([np.array([1,
                                                  0,
-                                                 0]) for i in range(n_s)]),
-                            np.vstack([directions[0] for i in range(n_s)]),
-                            np.vstack([directions[1] for i in range(n_s)]),
-                            np.vstack([directions[2] for i in range(n_s)]),
-                            np.vstack([directions[3] for i in range(n_s)]),
-                            np.vstack([directions[4] for i in range(n_s)]),
-                            np.vstack([directions[5] for i in range(n_s)])),
+                                                 0]) for i in range(n_m)]),
+                            np.vstack([directions[0] for i in range(n_m)]),
+                            np.vstack([directions[1] for i in range(n_m)]),
+                            np.vstack([directions[2] for i in range(n_m)]),
+                            np.vstack([directions[3] for i in range(n_m)]),
+                            np.vstack([directions[4] for i in range(n_m)]),
+                            np.vstack([directions[5] for i in range(n_m)])),
                            axis=0)
     max_Gs = np.concatenate(([max_Gs for i in range(7)]))
 
-    # To compare these results to results acquired with Camino, define a scheme file
+    # To compare the results against Camino, a scheme file was defined
+
+    # with open('camino/default.scheme', 'w+') as f:
+    #     f.write('VERSION: STEJSKALTANNER')
+    # for i, G in enumerate(max_Gs):
+    #     with open('camino/default.scheme', 'a') as f:
+    #         f.write('\n%s %s %s %s %s %s %s' %(bvecs[i,0], bvecs[i,1], bvecs[i,2], G, DELTA, delta, 81e-3))
+
+    # according to
+
     # VERSION: STEJSKALTANNER
     # x_1 y_1 z_1 |G_1| DELTA_1 delta_1 TE_1
     # x_2 y_2 z_2 |G_2| DELTA_2 delta_2 TE_2
-    # with open('disimpy/tests/camino/default.scheme', 'w+') as f:
-    #    f.write('VERSION: STEJSKALTANNER')
-    # for i, G in enumerate(max_Gs):
-    #    with open('disimpy/tests/camino/default.scheme', 'a') as f:
-    #        f.write('\n%s %s %s %s %s %s %s' %(bvecs[i,0], bvecs[i,1], bvecs[i,2], G, DELTA, delta, 81e-3))
-    # The following commands were used in generating the results in tests/camino
-    # datasynth -walkers 1000 -tmax 1000 -voxels 1 -p 0.0 -diffusivity 2E-9 -initial intra -substrate cylinder -cylinderrad 2E-6 -cylindersep 4.1E-6 -schemefile default.scheme > cyl_r2um.bfloat
-    # datasynth -walkers 1000 -tmax 1000 -voxels 1 -p 0.0 -diffusivity 2E-9 -initial intra -substrate cylinder -cylinderrad 4E-6 -cylindersep 8.2E-6 -schemefile default.scheme > cyl_r4um.bfloat
-    # datasynth -walkers 1000 -tmax 1000 -voxels 1 -p 0.0 -diffusivity 2E-9 -initial intra -substrate cylinder -cylinderrad 6E-6 -cylindersep 12.3E-6 -schemefile default.scheme > cyl_r6um.bfloat
-    # datasynth -walkers 1000 -tmax 1000 -voxels 1 -p 0.0 -diffusivity 2E-9 -initial intra -substrate cylinder -cylinderrad 8E-6 -cylindersep 16.4E-6 -schemefile default.scheme > cyl_r8um.bfloat
-    # datasynth -walkers 1000 -tmax 1000 -voxels 1 -p 0.0 -diffusivity 2E-9
-    # -initial intra -substrate cylinder -cylinderrad 10E-6 -cylindersep
-    # 20.5E-6 -schemefile default.scheme > cyl_r10um.bfloat
+
+    # The following commands were used in generating the results
+
+    # datasynth -walkers 10000 -tmax 1000 -voxels 1 -p 0.0 -diffusivity 2E-9 -initial intra -substrate cylinder -cylinderrad 2E-6 -cylindersep 4.1E-6 -schemefile camino/default.scheme > camino/cyl_r2um.bfloat
+    # datasynth -walkers 10000 -tmax 1000 -voxels 1 -p 0.0 -diffusivity 2E-9 -initial intra -substrate cylinder -cylinderrad 4E-6 -cylindersep 8.2E-6 -schemefile camino/default.scheme > camino/cyl_r4um.bfloat
+    # datasynth -walkers 10000 -tmax 1000 -voxels 1 -p 0.0 -diffusivity 2E-9 -initial intra -substrate cylinder -cylinderrad 6E-6 -cylindersep 12.3E-6 -schemefile camino/default.scheme > camino/cyl_r6um.bfloat
+    # datasynth -walkers 10000 -tmax 1000 -voxels 1 -p 0.0 -diffusivity 2E-9 -initial intra -substrate cylinder -cylinderrad 8E-6 -cylindersep 16.4E-6 -schemefile camino/default.scheme > camino/cyl_r8um.bfloat
+    # datasynth -walkers 10000 -tmax 1000 -voxels 1 -p 0.0 -diffusivity 2E-9 -initial intra -substrate cylinder -cylinderrad 10E-6 -cylindersep 20.5E-6 -schemefile camino/default.scheme > camino/cyl_r10um.bfloat
+
+    # Load Camino results
     camino_dir = os.path.join(
         os.path.dirname(
             os.path.abspath(__file__)),
@@ -360,26 +364,22 @@ def test_cylinder_diffusion():
     substrate['radius'] = 10e-6
     s_r10 = simulations.simulation(n_s, diffusivity, gradient, dt, substrate)
 
-    # Repeat this with larger n_s later with more time
-    npt.assert_almost_equal(c_r2 / n_s, s_r2 / n_s, 1)
-    npt.assert_almost_equal(c_r4 / n_s, s_r4 / n_s, 1)
-    npt.assert_almost_equal(c_r6 / n_s, s_r6 / n_s, 1)
-    npt.assert_almost_equal(c_r8 / n_s, s_r8 / n_s, 1)
-    npt.assert_almost_equal(c_r10 / n_s, s_r10 / n_s, 1)
+    npt.assert_almost_equal(s_r2 / n_s, c_r2 / n_s, 1)
+    npt.assert_almost_equal(s_r4 / n_s, c_r4 / n_s, 1)
+    npt.assert_almost_equal(s_r6 / n_s, c_r6 / n_s, 1)
+    npt.assert_almost_equal(s_r8 / n_s, c_r8 / n_s, 1)
+    npt.assert_almost_equal(s_r10 / n_s, c_r10 / n_s, 1)
 
 
 def test_ellipsoid_diffusion():
-    """Make sure ellipsoid and sphere diffusion gives the same result with
-       three equal semi-axes."""
     n_s = int(1e5)
     n_t = int(1e3)
     n_m = int(1e2)
     diffusivity = 2e-9
     radius = 10e-6
-    gradient = load_example_gradient()
-    bs = np.linspace(0, 3e9, n_m)
+    gradient, dt = load_example_gradient()
+    bs = np.linspace(1, 3e9, n_m)
     gradient = np.concatenate([gradient for i in range(n_m)], axis=0)
-    dt = 80e-3 / (gradient.shape[1] - 1)
     gradient, dt = gradients.interpolate_gradient(gradient, dt, n_t)
     gradient = gradients.set_b(gradient, dt, bs)
     substrate = {'type': 'sphere',
@@ -405,4 +405,3 @@ def test_ellipsoid_diffusion():
         n_s, diffusivity, gradient, dt, substrate)
     npt.assert_almost_equal(s_ellipsoid / n_s, s_ellipsoid_R / n_s, 3)
 
-# ADD MORE TESTS LATER

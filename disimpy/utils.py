@@ -21,6 +21,11 @@ def vec2vec_rotmat(v, k):
         3 by 3 rotation matrix.
     """
     axis = np.cross(v, k).astype(np.float)
+    if np.linalg.norm(axis) < np.finfo(float).eps:
+        if np.linalg.norm(v - k) > np.linalg.norm(v):
+            return -np.eye(3)
+        else:
+            return np.eye(3)
     axis /= np.linalg.norm(axis)
     angle = np.arcsin(np.linalg.norm(np.cross(v, k)) /
                       (np.linalg.norm(k) * np.linalg.norm(v)))

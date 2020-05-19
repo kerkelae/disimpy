@@ -128,8 +128,8 @@ def fill_uniformly_sphere(n, radius, seed=123):
 
 @numba.jit(nopython=True)
 def fill_uniformly_ellipsoid(n, a, b, c, seed=123):
-    """Sample n random points inside an ellipsoid with principal semi-axes a, b,
-       and c."""
+    """Sample n random points inside an axis aligned ellipsoid with principal
+       semi-axes a, b, and c."""
     np.random.seed(seed)
     filled = False
     i = 0

@@ -479,8 +479,6 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
     if np.any(np.isnan(signals)):
         raise Exception('Maximum number of iterations was exceeded in ' 
                         + 'intersection check.')
-    #  Destroy all memory allocations, events, and streams created
-    # numba.cuda.cudadrv.devices.reset() NOT WORKING
     if not quiet:
         print('Simulation finished.')
     return signals

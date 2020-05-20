@@ -53,6 +53,6 @@ References
 ==========
 
 .. [1] Hall, Matt G., and Daniel C. Alexander. "Convergence and parameter choice
-for Monte-Carlo simulations of diffusion MRI." IEEE transactions on medical
-imaging 28.9 (2009): 1354-1364. doi:`10.1109/TMI.2009.2015756
-<https://ieeexplore.ieee.org/document/4797853>`_
+       for Monte-Carlo simulations of diffusion MRI." IEEE transactions on
+       medical imaging 28.9 (2009): 1354-1364. doi:`10.1109/TMI.2009.2015756
+       <https://ieeexplore.ieee.org/document/4797853>`_

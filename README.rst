@@ -25,9 +25,13 @@ In addition, you will need an Nvidia's CUDA-enabled GPU with compute capability
 Installation
 ============
 
-Disimpy can be installed by cloning this repository and installing with pip
+Given that the requirements specified above are met, Disimpy can be installed by
+cloning this repository and installing with pip
 
     pip install .
+
+Alternatively, you can directly import the functions you want to use from the
+cloned repository.
 
 Automated tests
 ===============
@@ -41,7 +45,7 @@ tests by executing the following in your Python console.
 Usage example
 =============
 
-Please see notebook `tutorial.ipynb
+Please see the notebook `tutorial.ipynb
 <https://github.com/kerkelae/disimpy/blob/master/tutorial.ipynb>`_ for usage
 examples.
 

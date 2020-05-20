@@ -19,7 +19,7 @@ To use Disimpy, you need the following Python packages
 
 In addition, you will need an Nvidia's CUDA-enabled GPU with compute capability
 2.0 or above with the appropriate Nvidia driver. Please see `Numba's documentation
-<https://numba.pydata.org/numba-doc/dev/cuda/overview.html>`_. and `Nvidia's website 
+<https://numba.pydata.org/numba-doc/dev/cuda/overview.html>`_ and `Nvidia's website 
 <https://developer.nvidia.com/cuda-toolkit>`_ for more information.
 
 Installation

@@ -17,10 +17,10 @@ To use Disimpy, you need the following Python packages
 - matplotlib
 - scipy
 
-In addition, you will need an Nvidia's CUDA-enabled GPU with compute capability
-2.0 or above with the appropriate Nvidia driver. Please see `Numba's documentation
-<https://numba.pydata.org/numba-doc/dev/cuda/overview.html>`_ and `Nvidia's website 
-<https://developer.nvidia.com/cuda-toolkit>`_ for more information.
+In addition, you need an Nvidia's CUDA-enabled GPU with compute capability 2.0
+or above with the appropriate Nvidia driver. Please see `Numba's documentation
+<https://numba.pydata.org/numba-doc/dev/cuda/overview.html>`_ and `Nvidia's
+website <https://developer.nvidia.com/cuda-toolkit>`_ for more information.
 
 Installation
 ============
@@ -52,6 +52,7 @@ examples.
 References
 ==========
 
-.. [1] Hall, Matt G., and Daniel C. Alexander. "Convergence and parameter choice for Monte-Carlo simulations of diffusion MRI." IEEE transactions on medical imaging 28.9 (2009): 1354-1364. doi:`10.1109/TMI.2009.2015756 <https://ieeexplore.ieee.org/document/4797853>`_
-
-
+.. [1] Hall, Matt G., and Daniel C. Alexander. "Convergence and parameter choice
+for Monte-Carlo simulations of diffusion MRI." IEEE transactions on medical
+imaging 28.9 (2009): 1354-1364. doi:`10.1109/TMI.2009.2015756
+<https://ieeexplore.ieee.org/document/4797853>`_

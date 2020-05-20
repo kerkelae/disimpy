@@ -3,17 +3,24 @@ Disimpy
 *******
 
 Disimpy is a tool for generating synthetic diffusion magnetic resonance imaging
-data that is useful in model development and validation. Synthetic data is
-generated following the Monte Carlo simulation framework established by
-Hall et al. [1]_. The simulations are executed on
-Nvidia's CUDA-capable GPUs in a massively parallelized way, so using Disimpy
-requires a CUDA-capable GPU and the CUDA toolkit.
+data that is useful in the development and validation of new models and methods.
+The data is generated according to the Monte Carlo simulation framework
+established by Hall et al. [1]_.
 
 Requirements
 ============
 
-See more information `here 
-<https://numba.pydata.org/numba-doc/dev/cuda/overview.html>`_.
+To use Disimpy, you need the following Python packages
+
+- numba
+- numpy
+- matplotlib
+- scipy
+
+In addition, you will need an Nvidia's CUDA-enabled GPU with compute capability
+2.0 or above with the appropriate Nvidia driver. Please see `Numba's documentation
+<https://numba.pydata.org/numba-doc/dev/cuda/overview.html>`_. and `Nvidia's website 
+<https://developer.nvidia.com/cuda-toolkit>`_ for more information.
 
 Installation
 ============
@@ -25,8 +32,8 @@ Disimpy can be installed by cloning this repository and installing with pip
 Automated tests
 ===============
 
-To confirm that the installation and CUDA configuration works, run the tests
-by executing
+To confirm that the installation and CUDA configuration works, you can run the
+tests by executing the following in your Python console.
 
 >>> from disimpy import tests
 >>> tests.test()
@@ -34,9 +41,9 @@ by executing
 Usage example
 =============
 
-See notebook ``tutorial.ipynb`` to learn how to perform simulations.
-
-
+Please see notebook `tutorial.ipynb
+<https://github.com/kerkelae/disimpy/blob/master/tutorial.ipynb>`_ for usage
+examples.
 
 References
 ==========

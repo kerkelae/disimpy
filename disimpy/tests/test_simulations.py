@@ -6,7 +6,6 @@ import numba
 import numpy as np
 from numba import cuda
 import numpy.testing as npt
-from dipy.core.geometry import vec2vec_rotmat
 from numba.cuda.random import (create_xoroshiro128p_states,
                                xoroshiro128p_normal_float64)
 
@@ -297,7 +296,7 @@ def test_cylinder_diffusion():
                            [phi, 0, -1]]) / np.linalg.norm([0, 1, -phi])
     base_gradient = np.copy(gradient)
     for direction in directions:
-        Rs = [vec2vec_rotmat(np.array([1, 0, 0]), direction) for _ in bs]
+        Rs = [utils.vec2vec_rotmat(np.array([1, 0, 0]), direction) for _ in bs]
         gradient = np.concatenate(
             (gradient, gradients.rotate_gradient(
                 base_gradient, Rs)), axis=0)
@@ -394,7 +393,7 @@ def test_ellipsoid_diffusion():
     s_ellipsoid = simulations.simulation(
         n_s, diffusivity, gradient, dt, substrate)
     npt.assert_almost_equal(s_sphere / n_s, s_ellipsoid / n_s)
-    R = vec2vec_rotmat(np.array([2, 1., 4]) / np.linalg.norm(np.array(
+    R = utils.vec2vec_rotmat(np.array([2, 1., 4]) / np.linalg.norm(np.array(
         [2, 1., 4])), np.array([-2, 0, .4]) / np.linalg.norm(np.array([-2, 0, .4])))
     substrate = {'type': 'ellipsoid',
                  'a': radius,

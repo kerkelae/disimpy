@@ -270,8 +270,8 @@ def cuda_step_cylinder(positions, g_x, g_y, g_z, phases, rng_states, t, gamma,
 
 
 @cuda.jit()
-def cuda_step_ellipsoid(positions, g_x, g_y, g_z, phases, rng_states, t,
-                        n_spins, gamma, step_l, dt, a, b, c, R, R_inv):
+def cuda_step_ellipsoid(positions, g_x, g_y, g_z, phases, rng_states, t, gamma,
+                        step_l, dt, a, b, c, R, R_inv):
     """Kernel function for diffusion inside an ellipsoid."""
     thread_id = cuda.grid(1)
     if thread_id >= positions.shape[0]:
@@ -458,8 +458,8 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
         for t in range(1, gradient.shape[1]):
             cuda_step_ellipsoid[gs, bs, stream](d_positions, d_g_x, d_g_y,
                                                 d_g_z, d_phases, rng_states, t,
-                                                n_spins, GAMMA, step_l, dt, a,
-                                                b, c, R, R_inv)
+                                                GAMMA, step_l, dt, a, b, c, R,
+                                                R_inv)
             stream.synchronize()
             if trajectories:  # Update trajectories file
                 positions = d_positions.copy_to_host(stream=stream)

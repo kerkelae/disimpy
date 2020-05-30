@@ -37,10 +37,9 @@ Automated tests
 ===============
 
 To confirm that the installation and CUDA configuration works, you can run the
-tests by executing the following in your Python console.
+tests by executing the following on the command line.
 
->>> from disimpy import tests
->>> tests.test()
+    pytest disimpy
     
 Usage example
 =============

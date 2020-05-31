@@ -8,6 +8,8 @@ magnitude in SI units (T/m).
 import numpy as np
 import scipy.integrate
 
+from .simulations import GAMMA
+
 
 def interpolate_gradient(gradient, dt, n_t):
     """Interpolate gradient array to have n_t time points.
@@ -55,7 +57,6 @@ def calc_q(gradient, dt):
     q : ndarray
         q-vector array.
     """
-    GAMMA = 267.513e6
     q = GAMMA * scipy.integrate.cumtrapz(gradient, axis=1, dx=dt, initial=0)
     return q
 

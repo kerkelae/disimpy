@@ -21,14 +21,14 @@ def load_example_gradient():
     return gradient, dt
 
 
-def test_cuda_dot_product():
+def test__cuda_dot_product():
 
     @cuda.jit()
     def test_kernel(a, b, dp):
         thread_id = cuda.grid(1)
         if thread_id >= a.shape[0]:
             return
-        dp[thread_id] = simulations.cuda_dot_product(a[thread_id, :],
+        dp[thread_id] = simulations._cuda_dot_product(a[thread_id, :],
                                                      b[thread_id, :])
         return
 
@@ -42,14 +42,14 @@ def test_cuda_dot_product():
     return
 
 
-def test_cuda_normalize_vector():
+def test__cuda_normalize_vector():
 
     @cuda.jit()
     def test_kernel(a):
         thread_id = cuda.grid(1)
         if thread_id >= a.shape[0]:
             return
-        simulations.cuda_normalize_vector(a[thread_id, :])
+        simulations._cuda_normalize_vector(a[thread_id, :])
         return
 
     a = np.array([1.2, -5, 3])[np.newaxis, :]
@@ -61,14 +61,14 @@ def test_cuda_normalize_vector():
     return
 
 
-def test_cuda_random_step():
+def test__cuda_random_step():
 
     @cuda.jit()
     def test_kernel(steps, rng_states):
         thread_id = cuda.grid(1)
         if thread_id >= steps.shape[0]:
             return
-        simulations.cuda_random_step(
+        simulations._cuda_random_step(
             steps[thread_id, :], rng_states, thread_id)
         return
 
@@ -90,14 +90,14 @@ def test_cuda_random_step():
     return
 
 
-def test_cuda_mat_mul():
+def test__cuda_mat_mul():
 
     @cuda.jit()
     def test_kernel(a, R):
         thread_id = cuda.grid(1)
         if thread_id >= a.shape[0]:
             return
-        simulations.cuda_mat_mul(a[thread_id, :], R)
+        simulations._cuda_mat_mul(a[thread_id, :], R)
         return
 
     a = np.array([1.0, 0, 0])[np.newaxis, :]  # Original direction
@@ -112,14 +112,14 @@ def test_cuda_mat_mul():
     return
 
 
-def test_cuda_line_circle_intersection():
+def test__cuda_line_circle_intersection():
 
     @cuda.jit()
     def test_kernel(d, r0, step, radius):
         thread_id = cuda.grid(1)
         if thread_id >= r0.shape[0]:
             return
-        d[thread_id] = simulations.cuda_line_circle_intersection(
+        d[thread_id] = simulations._cuda_line_circle_intersection(
             r0[thread_id, :], step, radius)
         return
 
@@ -135,14 +135,14 @@ def test_cuda_line_circle_intersection():
     return
 
 
-def test_cuda_line_sphere_intersection():
+def test__cuda_line_sphere_intersection():
 
     @cuda.jit()
     def test_kernel(d, r0, step, radius):
         thread_id = cuda.grid(1)
         if thread_id >= r0.shape[0]:
             return
-        d[thread_id] = simulations.cuda_line_sphere_intersection(
+        d[thread_id] = simulations._cuda_line_sphere_intersection(
             r0[thread_id, :], step, radius)
         return
 
@@ -158,14 +158,14 @@ def test_cuda_line_sphere_intersection():
     return
 
 
-def test_cuda_line_ellipsoid_intersection():
+def test__cuda_line_ellipsoid_intersection():
 
     @cuda.jit()
     def test_kernel(d, r0, step, a, b, c):
         thread_id = cuda.grid(1)
         if thread_id >= r0.shape[0]:
             return
-        d[thread_id] = simulations.cuda_line_ellipsoid_intersection(
+        d[thread_id] = simulations._cuda_line_ellipsoid_intersection(
             r0[thread_id, :], step, a, b, c)
         return
 
@@ -181,14 +181,14 @@ def test_cuda_line_ellipsoid_intersection():
     return
 
 
-def test_cuda_reflection():
+def test__cuda_reflection():
 
     @cuda.jit()
     def test_kernel(r0, step, d, normal):
         thread_id = cuda.grid(1)
         if thread_id >= r0.shape[0]:
             return
-        simulations.cuda_reflection(r0[thread_id, :], step[thread_id, :], d,
+        simulations._cuda_reflection(r0[thread_id, :], step[thread_id, :], d,
                                     normal[thread_id, :])
         return
 
@@ -206,30 +206,30 @@ def test_cuda_reflection():
     return
 
 
-def test_fill_uniformly_circle():
+def test__fill_uniformly_circle():
     radius = 5e-6
     n = int(1e5)
-    points = simulations.fill_uniformly_circle(n, radius)
+    points = simulations._fill_uniformly_circle(n, radius)
     npt.assert_equal(np.max(np.linalg.norm(points, axis=1)) < radius, True)
     npt.assert_almost_equal(np.mean(points, axis=0), 0)
     return
 
 
-def test_fill_uniformly_sphere():
+def test__fill_uniformly_sphere():
     radius = 5e-6
     n = int(1e5)
-    points = simulations.fill_uniformly_sphere(n, radius)
+    points = simulations._fill_uniformly_sphere(n, radius)
     npt.assert_equal(np.max(np.linalg.norm(points, axis=1)) < radius, True)
     npt.assert_almost_equal(np.mean(points, axis=0), 0)
     return
 
 
-def test_fill_uniformly_ellipsoid():
+def test__fill_uniformly_ellipsoid():
     n = int(1e5)
     a = 10e-6
     b = 2e-6
     c = 5e-6
-    points = simulations.fill_uniformly_ellipsoid(n, a, b, c)
+    points = simulations._fill_uniformly_ellipsoid(n, a, b, c)
     npt.assert_equal(np.all(np.max(points, axis=0) < [a, b, c]), True)
     npt.assert_equal(np.all(np.min(points, axis=0) > [-a, -b, -c]), True)
     npt.assert_almost_equal(np.mean(points, axis=0), 0)
@@ -403,4 +403,3 @@ def test_ellipsoid_diffusion():
     s_ellipsoid_R = simulations.simulation(
         n_s, diffusivity, gradient, dt, substrate)
     npt.assert_almost_equal(s_ellipsoid / n_s, s_ellipsoid_R / n_s, 3)
-

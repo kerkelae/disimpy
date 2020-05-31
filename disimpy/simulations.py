@@ -174,8 +174,8 @@ def initial_positions_ellipsoid(n_spins, a, b, c, R_inv, seed=123):
 
 
 @cuda.jit()
-def cuda_step_free(positions, g_x, g_y, g_z, phases, rng_states, t, n_spins,
-                   gamma, step_l, dt):
+def cuda_step_free(positions, g_x, g_y, g_z, phases, rng_states, t, gamma,
+                   step_l, dt):
     """Kernel function for free diffusion."""
     thread_id = cuda.grid(1)
     if thread_id >= positions.shape[0]:
@@ -193,8 +193,8 @@ def cuda_step_free(positions, g_x, g_y, g_z, phases, rng_states, t, n_spins,
 
 
 @cuda.jit()
-def cuda_step_sphere(positions, g_x, g_y, g_z, phases, rng_states, t, n_spins,
-                     gamma, step_l, dt, radius):
+def cuda_step_sphere(positions, g_x, g_y, g_z, phases, rng_states, t, gamma,
+                     step_l, dt, radius):
     """Kernel function for diffusion inside a sphere."""
     thread_id = cuda.grid(1)
     if thread_id >= positions.shape[0]:
@@ -229,8 +229,8 @@ def cuda_step_sphere(positions, g_x, g_y, g_z, phases, rng_states, t, n_spins,
 
 
 @cuda.jit()
-def cuda_step_cylinder(positions, g_x, g_y, g_z, phases, rng_states, t, n_spins,
-                       gamma, step_l, dt, orientation, radius, R, R_inv):
+def cuda_step_cylinder(positions, g_x, g_y, g_z, phases, rng_states, t, gamma,
+                       step_l, dt, radius, R, R_inv):
     """Kernel function for diffusion inside an infinite cylinder."""
     thread_id = cuda.grid(1)
     if thread_id >= positions.shape[0]:
@@ -270,8 +270,8 @@ def cuda_step_cylinder(positions, g_x, g_y, g_z, phases, rng_states, t, n_spins,
 
 
 @cuda.jit()
-def cuda_step_ellipsoid(positions, g_x, g_y, g_z, phases, rng_states, t,
-                        n_spins, gamma, step_l, dt, a, b, c, R, R_inv):
+def cuda_step_ellipsoid(positions, g_x, g_y, g_z, phases, rng_states, t, gamma,
+                        step_l, dt, a, b, c, R, R_inv):
     """Kernel function for diffusion inside an ellipsoid."""
     thread_id = cuda.grid(1)
     if thread_id >= positions.shape[0]:
@@ -367,8 +367,8 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
                                      stream=stream)
         for t in range(1, gradient.shape[1]):
             cuda_step_free[gs, bs, stream](d_positions, d_g_x, d_g_y, d_g_z,
-                                           d_phases, rng_states, t, n_spins,
-                                           GAMMA, step_l, dt)
+                                           d_phases, rng_states, t, GAMMA,
+                                           step_l, dt)
             stream.synchronize()
             if trajectories:  # Update trajectories file
                 positions = d_positions.copy_to_host(stream=stream)
@@ -397,8 +397,8 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
         for t in range(1, gradient.shape[1]):
             cuda_step_cylinder[gs, bs, stream](d_positions, d_g_x, d_g_y,
                                                d_g_z, d_phases, rng_states, t,
-                                               n_spins, GAMMA, step_l, dt,
-                                               orientation, radius, R, R_inv)
+                                               GAMMA, step_l, dt, radius, R,
+                                               R_inv)
             stream.synchronize()
             if trajectories:  # Update trajectories file
                 positions = d_positions.copy_to_host(stream=stream)
@@ -428,7 +428,6 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
                                      d_phases,
                                      rng_states,
                                      t,
-                                     n_spins,
                                      GAMMA,
                                      step_l,
                                      dt,
@@ -459,8 +458,8 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
         for t in range(1, gradient.shape[1]):
             cuda_step_ellipsoid[gs, bs, stream](d_positions, d_g_x, d_g_y,
                                                 d_g_z, d_phases, rng_states, t,
-                                                n_spins, GAMMA, step_l, dt, a,
-                                                b, c, R, R_inv)
+                                                GAMMA, step_l, dt, a, b, c, R,
+                                                R_inv)
             stream.synchronize()
             if trajectories:  # Update trajectories file
                 positions = d_positions.copy_to_host(stream=stream)

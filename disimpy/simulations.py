@@ -531,13 +531,15 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
 
     # Confirm that Numba detects the GPU wihtout printing it
     with open(os.devnull, "w") as f, contextlib.redirect_stdout(f):
-        cuda_device_found = cuda.detect()
-    if not cuda_device_found:
-        raise Exception(
-            'Numba was unable to detect a CUDA GPU. To run the simulation, '
-            + 'check that the requirements are met and CUDA installation path '
-            + 'is correctly set up: '
-            + 'https://numba.pydata.org/numba-doc/dev/cuda/overview.html')
+        try:
+            cuda.detect()
+        except (cuda.cudadrv.driver.CudaSupportError or 
+                cuda.cudadrv.driver.CudaAPIError):
+            raise Exception(
+                'Numba was unable to detect a CUDA GPU. To run the simulation,'
+                + ' check that the requirements are met and CUDA installation'
+                + ' path is correctly set up: '
+                + 'https://numba.pydata.org/numba-doc/dev/cuda/overview.html')
 
     # Validate input parameters
     if (not isinstance(n_spins, int)) or (n_spins <= 0):

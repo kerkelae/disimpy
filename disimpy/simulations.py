@@ -320,7 +320,6 @@ def _cuda_step_cylinder(positions, g_x, g_y, g_z, phases, rng_states, t, gamma,
     step = cuda.local.array(3, numba.double)
     _cuda_random_step(step, rng_states, thread_id)
     r0 = positions[thread_id, :]
-    _cuda_mat_mul(R, step)  # Move to cylinder frame
     _cuda_mat_mul(R, r0)  # Move to cylinder frame
     iter_idx = 0
     check_intersection = True
@@ -361,7 +360,6 @@ def _cuda_step_ellipsoid(positions, g_x, g_y, g_z, phases, rng_states, t,
     step = cuda.local.array(3, numba.double)
     _cuda_random_step(step, rng_states, thread_id)
     r0 = positions[thread_id, :]
-    _cuda_mat_mul(R, step)  # Move to ellipsoid frame
     _cuda_mat_mul(R, r0)  # Move to ellipsoid frame
     iter_idx = 0
     check_intersection = True
@@ -502,7 +500,7 @@ def add_noise_to_data(data, sigma, seed=123):
     sigma : float
         Standard deviation of noise in each channel.
     seed : int, optional
-        Seed for pseudo random number generation.
+        Seed for pseudorandom number generation.
 
     Returns
     -------
@@ -520,7 +518,7 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
                trajectories=None, quiet=False, cuda_bs=128):
     """Execute a dMRI simulation.
 
-    For a detailled tutorial, please see the documentation at
+    For a detailed tutorial, please see the documentation at
     https://disimpy.readthedocs.io/en/latest/tutorial.html
 
     Parameters
@@ -557,7 +555,7 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
     with open(os.devnull, "w") as f, contextlib.redirect_stdout(f):
         try:
             cuda.detect()
-        except (cuda.cudadrv.driver.CudaSupportError or 
+        except (cuda.cudadrv.driver.CudaSupportError or
                 cuda.cudadrv.driver.CudaAPIError):
             raise Exception(
                 'Numba was unable to detect a CUDA GPU. To run the simulation,'
@@ -609,17 +607,17 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
                   % (gradient.shape[1] * n_spins * 3 * 25 / 1e9))
 
     # Set up cuda stream
-    bs = cuda_bs  # Cuda block size (threads per block)
-    gs = int(math.ceil(float(n_spins) / bs)) # Cuda grid size (blocks per grid)
+    bs = cuda_bs  # Threads per block)
+    gs = int(math.ceil(float(n_spins) / bs))  # Blocks per grid
     stream = cuda.stream()
 
     # Create pseudorandom number generator states
     rng_states = create_xoroshiro128p_states(gs * bs, seed=seed, stream=stream)
 
-    # Calculate average gradient magnitude during steps
+    # Calculate average gradient magnitude between time points
     gradient = (gradient[:, 0:-1, :] + gradient[:, 1::, :]) / 2
 
-    # Move arrays to the GPU
+    # Move required arrays to the GPU
     d_g_x = cuda.to_device(
         np.ascontiguousarray(gradient[:, :, 0]), stream=stream)
     d_g_y = cuda.to_device(
@@ -628,8 +626,8 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
         np.ascontiguousarray(gradient[:, :, 2]), stream=stream)
     d_iter_exc = cuda.to_device(np.zeros(n_spins).astype(bool))
     d_phases = cuda.to_device(
-            np.ascontiguousarray(np.zeros((gradient.shape[0], n_spins))),
-            stream=stream)
+        np.ascontiguousarray(np.zeros((gradient.shape[0], n_spins))),
+        stream=stream)
 
     # Calculate step length
     step_l = np.sqrt(6 * diffusivity * dt)
@@ -704,7 +702,7 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
                 f.write('\n')
         d_positions = cuda.to_device(
             np.ascontiguousarray(positions), stream=stream)
-        
+
         # Run simulation
         for t in range(gradient.shape[1]):
             _cuda_step_cylinder[gs, bs, stream](d_positions, d_g_x, d_g_y,
@@ -788,7 +786,7 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
             raise ValueError('Incorrect value (%s) for rotation matrix R' % R
                              + ' which has to be a float array of shape (3, 3).'
                              )
-       
+
         # Calculate rotation from ellipsoid frame to lab frame
         R_inv = R[:]
 
@@ -869,7 +867,7 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
         d_sv_borders = cuda.to_device(sv_borders, stream=stream)
         d_tri_indices = cuda.to_device(tri_indices, stream=stream)
         d_sv_mapping = cuda.to_device(sv_mapping, stream=stream)
-        
+
         # Calculate initial positions
         if not quiet:
             print("Calculating initial positions.", end="\r")

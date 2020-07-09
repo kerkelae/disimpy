@@ -43,29 +43,6 @@ def test__cuda_dot_product():
     return
 
 
-def test__cuda_cross_product():
-
-    @cuda.jit()
-    def test_kernel(a, b, c):
-        thread_id = cuda.grid(1)
-        if thread_id >= a.shape[0]:
-            return
-        C = cuda.local.array(3, numba.double)
-        simulations._cuda_cross_product(a[thread_id, :], b[thread_id, :], C)
-        for i in range(3):
-            c[thread_id, i] = C[i]
-        return
-
-    a = np.array([1.2, 5, 3])[np.newaxis, :]
-    b = np.array([1, 3.5, -8])[np.newaxis, :]
-    c = np.zeros((1, 3))
-    stream = cuda.stream()
-    test_kernel[1, 1, stream](a, b, c)
-    stream.synchronize()
-    npt.assert_almost_equal(c[0], np.cross(a[0], b[0]))
-    return
-
-
 def test__cuda_normalize_vector():
 
     @cuda.jit()

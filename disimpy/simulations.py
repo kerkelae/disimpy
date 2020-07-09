@@ -44,10 +44,9 @@ def _cuda_normalize_vector(v):
 
 @cuda.jit(device=True)
 def _cuda_random_step(step, rng_states, thread_id):
-    """Generate a random step in 3D."""
-    step[0] = xoroshiro128p_normal_float64(rng_states, thread_id)
-    step[1] = xoroshiro128p_normal_float64(rng_states, thread_id)
-    step[2] = xoroshiro128p_normal_float64(rng_states, thread_id)
+    """Generate a random step from a uniform distribution over a sphere."""
+    for i in range(3):
+        step[i] = xoroshiro128p_normal_float64(rng_states, thread_id)
     _cuda_normalize_vector(step)
     return
 
@@ -66,19 +65,19 @@ def _cuda_mat_mul(R, v):
 
 @cuda.jit(device=True)
 def _cuda_line_circle_intersection(r0, step, radius):
-    """Calculate distance from r0 to circle centered at origin along step. r0
-    should always be inside the circle in these simulations."""
-    a = step[0]**2 + step[1]**2
-    b = 2 * (r0[0] * step[0] + r0[1] * step[1])
-    c = r0[0]**2 + r0[1]**2 - radius**2
-    d = (-b + math.sqrt(b**2 - 4 * a * c)) / (2 * a)
+    """Calculate the distance from r0 to a circle centered at origin along step.
+    r0 must be inside the circle."""
+    A = step[0]**2 + step[1]**2
+    B = 2 * (r0[0] * step[0] + r0[1] * step[1])
+    C = r0[0]**2 + r0[1]**2 - radius**2
+    d = (-B + math.sqrt(B**2 - 4 * A * C)) / (2 * A)
     return d
 
 
 @cuda.jit(device=True)
 def _cuda_line_sphere_intersection(r0, step, radius):
-    """Calculate distance from r0 to sphere centered at origin along step. r0
-    should always be inside the sphere in these simulations."""
+    """Calculate the distance from r0 to a sphere centered at origin along step.
+    r0 must be inside the sphere."""
     dp = _cuda_dot_product(step, r0)
     d = -dp + math.sqrt(dp**2 - (_cuda_dot_product(r0, r0) - radius**2))
     return d
@@ -86,9 +85,8 @@ def _cuda_line_sphere_intersection(r0, step, radius):
 
 @cuda.jit(device=True)
 def _cuda_line_ellipsoid_intersection(r0, step, a, b, c):
-    """Calculate distance from r0 to an axis aligned ellipsoid centered at
-    origin along step. r0 should always be inside the ellipsoid in these
-    simulations."""
+    """Calculate the distance from r0 to an axis aligned ellipsoid centered at
+    origin along step. r0 must be inside the ellipsoid."""
     A = (step[0] / a)**2 + (step[1] / b)**2 + (step[2] / c)**2
     B = 2 * (a**(-2) * step[0] * r0[0] + b**(-2) *
              step[1] * r0[1] + c**(-2) * step[2] * r0[2])
@@ -106,7 +104,7 @@ def _cuda_reflection(r0, step, d, normal):
         intersection[i] = r0[i] + d * step[i]
         v[i] = intersection[i] - r0[i]
     dp = _cuda_dot_product(v, normal)
-    if dp < 0:
+    if dp < 0:  # Make sure r0 isn't 'behind' the normal
         for i in range(3):
             normal[i] *= -1
         dp = _cuda_dot_product(v, normal)
@@ -121,10 +119,10 @@ def _cuda_reflection(r0, step, d, normal):
 
 @numba.jit(nopython=True)
 def _fill_circle(n, radius, seed=123):
-    """Sample n random points inside a circle."""
+    """Sample n random points from a uniform distribution inside a circle."""
     np.random.seed(seed)
-    filled = False
     i = 0
+    filled = False
     points = np.zeros((n, 2))
     while not filled:
         p = (np.random.random(2) - .5) * 2 * radius
@@ -138,10 +136,10 @@ def _fill_circle(n, radius, seed=123):
 
 @numba.jit(nopython=True)
 def _fill_sphere(n, radius, seed=123):
-    """Sample n random points inside a sphere."""
+    """Sample n random points from a uniform distribution inside a sphere."""
     np.random.seed(seed)
-    filled = False
     i = 0
+    filled = False
     points = np.zeros((n, 3))
     while not filled:
         p = (np.random.random(3) - .5) * 2 * radius
@@ -155,11 +153,11 @@ def _fill_sphere(n, radius, seed=123):
 
 @numba.jit(nopython=True)
 def _fill_ellipsoid(n, a, b, c, seed=123):
-    """Sample n random points inside an axis aligned ellipsoid with principal
-    semi-axes a, b, and c."""
+    """Sample n random points from a uniform distribution inside an axis aligned
+    ellipsoid with semi-axes a, b, and c."""
     np.random.seed(seed)
-    filled = False
     i = 0
+    filled = False
     points = np.zeros((n, 3))
     while not filled:
         p = (np.random.random(3) - .5) * 2 * np.array([a, b, c])
@@ -171,28 +169,30 @@ def _fill_ellipsoid(n, a, b, c, seed=123):
     return points
 
 
-def _initial_positions_cylinder(n_spins, radius, R_inv, seed=123):
+def _initial_positions_cylinder(n_spins, radius, R, seed=123):
     """Calculate initial positions for spins in a cylinder whose orientation is
-    defined by R_inv."""
+    defined by R which defines the rotation from cylinder frame to lab frame."""
     positions = np.zeros((n_spins, 3))
     positions[:, 1:3] = _fill_circle(n_spins, radius, seed)
-    positions = np.matmul(R_inv, positions.T).T
+    positions = np.matmul(R, positions.T).T
     return positions
 
 
-def _initial_positions_ellipsoid(n_spins, a, b, c, R_inv, seed=123):
-    """Calculate initial positions for spins in an ellipsoid with principal semi
-    axes a, b, c whos whose orientation is defined by R_inv."""
+def _initial_positions_ellipsoid(n_spins, a, b, c, R, seed=123):
+    """Calculate initial positions for spins in an ellipsoid with semi-axes a,
+    b, c whos whose orientation is defined by R which defines the rotation from
+    ellipsoid frame to lab frame."""
     positions = _fill_ellipsoid(n_spins, a, b, c, seed)
-    positions = np.matmul(R_inv, positions.T).T
+    positions = np.matmul(R, positions.T).T
     return positions
 
 
 @cuda.jit(device=True)
 def _cuda_ray_triangle_intersection_check(A, B, C, r0, step):
-    """Check if a ray intersets with a triangle. The output is the distance (in
-    units of step length) from r0 to intersection if intersection found, nan
-    otherwise. This function is based on the Moller-Trumbore algorithm."""
+    """Check if a ray defined by r0 and step intersets with a triangle defined
+    by A, B, and C. The output is the distance in units of step length from r0
+    to intersection if intersection found, nan otherwise. This function is based
+    on the Moller-Trumbore algorithm."""
     T = cuda.local.array(3, numba.double)
     E_1 = cuda.local.array(3, numba.double)
     E_2 = cuda.local.array(3, numba.double)
@@ -220,7 +220,7 @@ def _cuda_ray_triangle_intersection_check(A, B, C, r0, step):
 @cuda.jit(device=True)
 def ll_subvoxel_overlap_1d(xs, x1, x2):
     """For an interval [x1, x2], return the index of the lower limit of the
-    overlapping subvoxels."""
+    overlapping subvoxels whose borders are defined by the elements of xs."""
     xmin = min(x1, x2)
     if xmin <= xs[0]:
         return 0
@@ -229,8 +229,8 @@ def ll_subvoxel_overlap_1d(xs, x1, x2):
         return ll
     else:
         ll = 0
-        for i in range(len(xs)):
-            if xs[i] > xmin:
+        for i, x in enumerate(xs):
+            if x > xmin:
                 ll = i - 1
                 return ll
         return ll
@@ -239,7 +239,7 @@ def ll_subvoxel_overlap_1d(xs, x1, x2):
 @cuda.jit(device=True)
 def ul_subvoxel_overlap_1d(xs, x1, x2):
     """For an interval [xmin, xmax], return the index of the upper limit of the
-    overlapping subvoxels."""
+    overlapping subvoxels whose borders are defined by the elements of xs."""
     xmax = max(x1, x2)
     if xmax >= xs[-1]:
         return len(xs) - 1
@@ -248,8 +248,8 @@ def ul_subvoxel_overlap_1d(xs, x1, x2):
         return ul
     else:
         ul = len(xs) - 1
-        for i in range(len(xs)):
-            if not (xs[i] < xmax):
+        for i, x in enumerate(xs):
+            if not x < xmax:
                 ul = i
                 return ul
         return len(xs) - 1
@@ -291,7 +291,7 @@ def _cuda_step_sphere(positions, g_x, g_y, g_z, phases, rng_states, t, gamma,
         d = _cuda_line_sphere_intersection(r0, step, radius)
         if d > 0 and d < step_l:
             normal = cuda.local.array(3, numba.double)
-            for i in range(0, 3):
+            for i in range(3):
                 normal[i] = -(r0[i] + d * step[i])
             _cuda_normalize_vector(normal)
             _cuda_reflection(r0, step, d, normal)
@@ -492,6 +492,30 @@ def _cuda_step_mesh(positions, g_x, g_y, g_z, phases, rng_states, t, gamma,
     return
 
 
+def add_noise_to_data(data, sigma, seed=123):
+    """Add Rician noise to data.
+
+    Parameters
+    ----------
+    data : ndarray
+        Array containing the data.
+    sigma : float
+        Standard deviation of noise in each channel.
+    seed : int, optional
+        Seed for pseudo random number generation.
+
+    Returns
+    -------
+    noisy_data : ndarray
+        Noisy data.
+    """
+    np.random.seed(seed)
+    noisy_data = np.abs(
+        data + np.random.normal(size=data.shape, scale=sigma, loc=0)
+        + 1j * np.random.normal(size=data.shape, scale=sigma, loc=0))
+    return noisy_data
+
+
 def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
                trajectories=None, quiet=False, cuda_bs=128):
     """Execute a dMRI simulation.
@@ -584,15 +608,18 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
             print('The trajectories file will be up to %s GB'
                   % (gradient.shape[1] * n_spins * 3 * 25 / 1e9))
 
-    # Set up cuda stream and move required arrays to device
+    # Set up cuda stream
     bs = cuda_bs  # Cuda block size (threads per block)
-    # Cuda grid size (blocks per grid)
-    gs = int(math.ceil(float(n_spins) / bs))
+    gs = int(math.ceil(float(n_spins) / bs)) # Cuda grid size (blocks per grid)
     stream = cuda.stream()
+
+    # Create pseudorandom number generator states
     rng_states = create_xoroshiro128p_states(gs * bs, seed=seed, stream=stream)
-    d_phases = cuda.to_device(
-        np.ascontiguousarray(np.zeros((gradient.shape[0], n_spins))),
-        stream=stream)
+
+    # Calculate average gradient magnitude during steps
+    gradient = (gradient[:, 0:-1, :] + gradient[:, 1::, :]) / 2
+
+    # Move arrays to the GPU
     d_g_x = cuda.to_device(
         np.ascontiguousarray(gradient[:, :, 0]), stream=stream)
     d_g_y = cuda.to_device(
@@ -600,14 +627,21 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
     d_g_z = cuda.to_device(
         np.ascontiguousarray(gradient[:, :, 2]), stream=stream)
     d_iter_exc = cuda.to_device(np.zeros(n_spins).astype(bool))
+    d_phases = cuda.to_device(
+            np.ascontiguousarray(np.zeros((gradient.shape[0], n_spins))),
+            stream=stream)
 
-    step_l = np.sqrt(6 * diffusivity * dt)  # Step length
+    # Calculate step length
+    step_l = np.sqrt(6 * diffusivity * dt)
+
     if not quiet:
         print('Step length = %s' % step_l)
         print('Number of spins = %s' % n_spins)
         print('Number of steps = %s' % gradient.shape[1])
 
     if substrate['type'] == 'free':
+
+        # Calculate initial positions
         positions = np.zeros((n_spins, 3))
         if trajectories:
             with open(trajectories, 'w') as f:
@@ -615,6 +649,8 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
                 f.write('\n')
         d_positions = cuda.to_device(
             np.ascontiguousarray(positions), stream=stream)
+
+        # Run simulation
         for t in range(1, gradient.shape[1]):
             _cuda_step_free[gs, bs, stream](d_positions, d_g_x, d_g_y, d_g_z,
                                             d_phases, rng_states, t, GAMMA,
@@ -631,6 +667,8 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
                     end="\r")
 
     elif substrate['type'] == 'cylinder':
+
+        # Validate substrate dictionary
         if ((not 'radius' in substrate.keys()) or
                 (not 'orientation' in substrate.keys())):
             raise ValueError('Incorrect value (%s) for parameter' % substrate
@@ -649,11 +687,16 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
             raise ValueError('Incorrect value (%s) for cylinder' % orientation
                              + ' orientation which has to be a float array of'
                              + ' length 3.')
+
+        # Calculate rotation from lab frame to cylinder frame
         orientation /= np.linalg.norm(orientation)
         default_orientation = np.array([1.0, 0, 0])
-        # Calculate rotation between cylinder frame and lab frame
         R = utils.vec2vec_rotmat(orientation, default_orientation)
+
+        # Calculate rotation from cylinder frame to lab frame
         R_inv = np.linalg.inv(R)
+
+        # Calculate initial positions
         positions = _initial_positions_cylinder(n_spins, radius, R_inv, seed)
         if trajectories:
             with open(trajectories, 'w') as f:
@@ -661,7 +704,9 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
                 f.write('\n')
         d_positions = cuda.to_device(
             np.ascontiguousarray(positions), stream=stream)
-        for t in range(1, gradient.shape[1]):
+        
+        # Run simulation
+        for t in range(gradient.shape[1]):
             _cuda_step_cylinder[gs, bs, stream](d_positions, d_g_x, d_g_y,
                                                 d_g_z, d_phases, rng_states, t,
                                                 GAMMA, step_l, dt, radius, R,
@@ -678,6 +723,8 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
                     end="\r")
 
     elif substrate['type'] == 'sphere':
+
+        # Validate substrate dictionary
         if not 'radius' in substrate.keys():
             raise ValueError('Incorrect value (%s) for parameter' % substrate
                              + ' substrate which has to be a dictionary with'
@@ -687,6 +734,8 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
         if (not isinstance(radius, float)) or (radius <= 0):
             raise ValueError('Incorrect value (%s) for sphere radius' % radius
                              + ' which has to be a positive float.')
+
+        # Calculate initial positions
         positions = _fill_sphere(n_spins, radius, seed)
         if trajectories:
             with open(trajectories, 'w') as f:
@@ -694,7 +743,9 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
                 f.write('\n')
         d_positions = cuda.to_device(
             np.ascontiguousarray(positions), stream=stream)
-        for t in range(1, gradient.shape[1]):
+
+        # Run simulation
+        for t in range(gradient.shape[1]):
             _cuda_step_sphere[gs, bs, stream](d_positions, d_g_x, d_g_y, d_g_z,
                                               d_phases, rng_states, t, GAMMA,
                                               step_l, dt, radius, d_iter_exc)
@@ -710,6 +761,8 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
                     end="\r")
 
     elif substrate['type'] == 'ellipsoid':
+
+        # Validate substrate dictionary
         if ((not 'a' in substrate.keys()) or (not 'b' in substrate.keys())
                 or (not 'c' in substrate.keys()) or
                 (not 'R' in substrate.keys())):
@@ -735,7 +788,14 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
             raise ValueError('Incorrect value (%s) for rotation matrix R' % R
                              + ' which has to be a float array of shape (3, 3).'
                              )
-        R_inv = np.linalg.inv(R)
+       
+        # Calculate rotation from ellipsoid frame to lab frame
+        R_inv = R[:]
+
+        # Calculate rotation from lab frame to cylinder frame
+        R = np.linalg.inv(R_inv)
+
+        # Calculate initial positions
         positions = _initial_positions_ellipsoid(n_spins, a, b, c, R_inv)
         if trajectories:
             with open(trajectories, 'w') as f:
@@ -743,7 +803,9 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
                 f.write('\n')
         d_positions = cuda.to_device(
             np.ascontiguousarray(positions), stream=stream)
-        for t in range(1, gradient.shape[1]):
+
+        # Run simulation
+        for t in range(gradient.shape[1]):
             _cuda_step_ellipsoid[gs, bs, stream](d_positions, d_g_x, d_g_y,
                                                  d_g_z, d_phases, rng_states, t,
                                                  GAMMA, step_l, dt, a, b, c, R,
@@ -760,6 +822,8 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
                     end="\r")
 
     elif substrate['type'] == 'mesh':
+
+        # Validate substrate dictionary
         if not 'mesh' in substrate.keys():
             raise ValueError('Incorrect value (%s) for parameter' % substrate
                              + ' substrate which has to be a dictionary with'
@@ -795,33 +859,41 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
                                  + ' which has to be a positive integer.')
         else:
             N_sv = 20
+
+        # Calculate subvoxel division
         if not quiet:
             print("Calculating subvoxel division.", end="\r")
         sv_borders = meshes._mesh_space_subdivision(mesh, N=N_sv)
         tri_indices, sv_mapping = meshes._subvoxel_to_triangle_mapping(
             mesh, sv_borders)
+        d_sv_borders = cuda.to_device(sv_borders, stream=stream)
+        d_tri_indices = cuda.to_device(tri_indices, stream=stream)
+        d_sv_mapping = cuda.to_device(sv_mapping, stream=stream)
+        
+        # Calculate initial positions
         if not quiet:
             print("Calculating initial positions.", end="\r")
         positions = meshes._fill_mesh(n_spins, mesh, sv_borders, tri_indices,
                                       sv_mapping, intra, extra)
         if not quiet:
             print("Finished calculating initial positions.")
-        voxel_mesh = meshes._AABB_to_mesh(np.min(np.min(mesh, 0), 0),
-                                          np.max(np.max(mesh, 0), 0))
-        d_triangles = cuda.to_device(
-            np.ascontiguousarray(mesh.ravel()), stream=stream)
-        d_sv_borders = cuda.to_device(sv_borders, stream=stream)
-        d_tri_indices = cuda.to_device(tri_indices, stream=stream)
-        d_sv_mapping = cuda.to_device(sv_mapping, stream=stream)
-        d_voxel_mesh = cuda.to_device(
-            np.ascontiguousarray(voxel_mesh.ravel()), stream=stream)
         if trajectories:
             with open(trajectories, 'w') as f:
                 [f.write(str(i) + ' ') for i in positions.ravel()]
                 f.write('\n')
         d_positions = cuda.to_device(
             np.ascontiguousarray(positions), stream=stream)
-        for t in range(1, gradient.shape[1]):
+
+        # Calculate voxel boundaries as triangular mesh
+        voxel_mesh = meshes._AABB_to_mesh(np.min(np.min(mesh, 0), 0),
+                                          np.max(np.max(mesh, 0), 0))
+        d_triangles = cuda.to_device(
+            np.ascontiguousarray(mesh.ravel()), stream=stream)
+        d_voxel_mesh = cuda.to_device(
+            np.ascontiguousarray(voxel_mesh.ravel()), stream=stream)
+
+        # Run simulation
+        for t in range(gradient.shape[1]):
             _cuda_step_mesh[gs, bs, stream](d_positions, d_g_x, d_g_y,
                                             d_g_z, d_phases, rng_states, t,
                                             GAMMA, step_l, dt, d_triangles,
@@ -847,10 +919,13 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
                          + ' values: \'free\', \'cylinder\', \'sphere\','
                          + ' \'ellipsoid\', \'mesh\'.')
 
+    # Check if intersection algorithm iteration limit was exceeded
     iter_exc = d_iter_exc.copy_to_host(stream=stream)
     if np.any(iter_exc):
         raise Exception('Maximum number of iterations was exceeded in the'
                         + ' intersection check algorithm.')
+
+    # Calculate simulated signal
     phases = d_phases.copy_to_host(stream=stream)
     signals = np.real(np.sum(np.exp(1j * phases), axis=1))
     if not quiet:

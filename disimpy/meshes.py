@@ -149,8 +149,8 @@ def _interval_sv_overlap_1d(xs, x1, x2):
         ll = len(xs) - 1
     else:
         ll = 0
-        for i in range(len(xs)):
-            if xs[i] > xmin:
+        for i, x in enumerate(xs):
+            if x > xmin:
                 ll = i - 1
                 break
     if xmax >= xs[-1]:
@@ -159,8 +159,8 @@ def _interval_sv_overlap_1d(xs, x1, x2):
         ul = 0
     else:
         ul = len(xs) - 1
-        for i in range(len(xs)):
-            if not (xs[i] < xmax):
+        for i, x in enumerate(xs):
+            if not x < xmax:
                 ul = i
                 break
     return ll, ul

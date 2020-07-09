@@ -536,7 +536,7 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
     substrate : dict
         A dictionary defining the diffusion environment.
     seed : int, optional
-        Seed for pseudo random number generation.
+        Seed for pseudorandom number generation.
     trajectories : str, optional
         Path to file in which to save trajectories. Resulting file can be very
         large!

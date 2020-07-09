@@ -36,10 +36,11 @@ instructions below.
 Installation
 ############
 
-To avoid possible issues with automatic installation of some of the dependencies
-(llvmlite), we recommend installing Disimpy in a virtual environment or a conda
-environment. Disimpy can be installed by downloading the source code from `here <https://github.com/kerkelae/disimpy/archive/master.zip>`_.
-Then, extract the .zip file, navigate into the extracted directory, and install
+To avoid possible issues with automatic installation of some of the
+dependencies, we recommend installing Disimpy in a virtual environment or a
+conda environment. Disimpy can be installed by downloading the source code from
+`here <https://github.com/kerkelae/disimpy/archive/master.zip>`_. Extract the
+downloaded .zip file, navigate into the extracted directory, and install
 with pip: ::
 
     pip install .

@@ -1,5 +1,5 @@
 ---
-title: 'Disimpy: A massively parallelized Monte Carlo simulator for synthesizing diffusion-weighted MRI data in Python'
+title: 'Disimpy: A massively parallel Monte Carlo simulator for synthesizing diffusion-weighted MRI data in Python'
 tags:
   - Python
   - diffusion MRI
@@ -10,9 +10,9 @@ authors:
     orcid: 0000-0001-9446-4305
     affiliation: 1
   - name: Fabio Nery
-    affiliation: 2
+    affiliation: 1
   - name: Matt G. Hall
-    affiliation: "2, 1"
+    affiliation: "2,1"
   - name: Chris A. Clark
     affiliation: 1
 affiliations:

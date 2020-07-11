@@ -62,7 +62,7 @@ html_static_path = ['_static']
 
 html_theme_options = {
     'page_width': '1075px',  # Default width is too narrow for notebooks
-    'description': 'A massively parallelized diffusion MRI simulator written in Python.',
+    'description': 'Massively parallel diffusion MRI simulator written in Python.',
 }
 
 html_show_sourcelink = False

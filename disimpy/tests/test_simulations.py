@@ -293,8 +293,8 @@ def test_free_diffusion():
     signals = simulations.simulation(n_s, diffusivity, gradient, dt,
                                      substrate, trajectories=traj_file)
     trajectories = np.loadtxt(traj_file)
-    npt.assert_equal(trajectories.shape, (n_t - 1, n_s * 3))
-    trajectories = trajectories.reshape((n_t - 1, n_s, 3))
+    npt.assert_equal(trajectories.shape, (n_t + 1, n_s * 3))
+    trajectories = trajectories.reshape((n_t + 1, n_s, 3))
     npt.assert_equal(np.prod(trajectories[0, :, :] == 0), 1)
     npt.assert_almost_equal(np.mean(np.sum(trajectories, axis=0)), 0, 3)
     return

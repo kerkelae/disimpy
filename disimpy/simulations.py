@@ -612,9 +612,6 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
     # Create pseudorandom number generator states
     rng_states = create_xoroshiro128p_states(gs * bs, seed=seed, stream=stream)
 
-    # Calculate average gradient magnitude between time points
-    gradient = (gradient[:, 0:-1, :] + gradient[:, 1::, :]) / 2
-
     # Move required arrays to the GPU
     d_g_x = cuda.to_device(
         np.ascontiguousarray(gradient[:, :, 0]), stream=stream)
@@ -647,7 +644,7 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
             np.ascontiguousarray(positions), stream=stream)
 
         # Run simulation
-        for t in range(1, gradient.shape[1]):
+        for t in range(gradient.shape[1]):
             _cuda_step_free[gs, bs, stream](d_positions, d_g_x, d_g_y, d_g_z,
                                             d_phases, rng_states, t, GAMMA,
                                             step_l, dt)

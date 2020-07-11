@@ -68,17 +68,18 @@ convergence [@hall:2009]⁠, it is important that Disimpy's runtime does not
 linearly depend on the number of random walkers until the number of walkers is
 in the thousands or tens of thousands, depending on the GPU.
 
+Diffusion can be simulated without restrictions, inside analytically defined
+geometries (cylinders, spheres, ellipsoids), and in arbitrary geometries defined
+by triangular meshes [@panagiotaki:2010; @hall:2017] (\autoref{fig:2}).
+Importantly, the random walk model of diffusion is able to capture
+time-dependent diffusion.
+
 Disimpy supports arbitrary diffusion encoding gradient sequences, such as those
 used in conventional pulsed field gradient experiments [@stejskal:1965] as well
 as the recently developed q-space trajectory encoding 
 [@eriksson:2013; @sjolund:2015]⁠. Useful helper functions for generating and
 manipulating gradient arrays are provided. Synthetic data from multiple gradient
-encoding schemes can be generated from the same simulation. Diffusion can be
-simulated without restrictions, inside analytically defined geometries
-(cylinders, spheres, ellipsoids), and in arbitrary geometries defined by
-triangular meshes [@panagiotaki:2010; @hall:2017] (\autoref{fig:2}).
-Importantly, the random walk model of diffusion is able to capture
-time-dependent diffusion.
+encoding schemes can be generated from the same simulation.
 
 Documentation, tutorial, and contributing guidelines are provided at 
 https://disimpy.readthedocs.io/.

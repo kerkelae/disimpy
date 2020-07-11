@@ -15,19 +15,19 @@ from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
 
 def load_mesh(mesh_file):
-    """Return mesh array corresponding to a triangular mesh in a .ply file.
+    """Return the mesh array corresponding to a triangular mesh in a .ply file.
 
     Parameters
     ----------
     mesh_file : str
-        Path to triangular mesh file in .ply format [1]_.
+        Path of a triangular mesh file in .ply format [1]_.
 
     Returns
     -------
-    mesh : ndarray
+    mesh : numpy.ndarray
         Mesh array of shape (n of triangles, 3, 3) where the second dimension
         indices correspond to different triangle points and the third dimension
-        is the cartesian coordinates of triangle points.
+        is the Cartesian coordinates of triangle points.
 
     References
     ----------
@@ -49,16 +49,16 @@ def load_mesh(mesh_file):
 
 
 def show_mesh(mesh, show=True):
-    """Show a visualization of a triangular mesh with random triangle colours.
+    """Visualize the triangular mesh with random triangle colours.
 
     Parameters
     ----------
-    mesh : ndarray
+    mesh : numpy.ndarray
         Mesh array of shape (n of triangles, 3, 3) where the second dimension
         indices correspond to different triangle points and the third dimension
-        is the cartesian coordinates of triangle.
+        is the Cartesian coordinates of triangle.
     show : bool
-        Boolean switch defining whether to render figure or not.
+        Whether to render figure or not.
 
     Returns
     -------
@@ -67,12 +67,11 @@ def show_mesh(mesh, show=True):
     np.random.seed(123)
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
-    ax.set_xlim([np.min(np.min(mesh, 0), 0)[0],
-                 np.max(np.max(mesh, 0), 0)[0]])
-    ax.set_ylim([np.min(np.min(mesh, 0), 0)[1],
-                 np.max(np.max(mesh, 0), 0)[1]])
-    ax.set_zlim([np.min(np.min(mesh, 0), 0)[2],
-                 np.max(np.max(mesh, 0), 0)[2]])
+    mesh_min = np.min(np.min(mesh, 0), 0)
+    mesh_max = np.max(np.max(mesh, 0), 0)
+    ax.set_xlim([mesh_min[0], mesh_max[0]])
+    ax.set_ylim([mesh_min[1], mesh_max[1]])
+    ax.set_zlim([mesh_min[2], mesh_max[2]])
     for triangle in mesh:
         A = triangle[0, :]
         B = triangle[1, :]
@@ -94,23 +93,23 @@ def show_mesh(mesh, show=True):
 
 
 def _mesh_space_subdivision(mesh, N=20):
-    """Divide mesh volume into N**3 subvoxels.
+    """Divide the mesh volume into N**3 subvoxels.
 
     Parameters
     ----------
-    mesh : ndarray
+    mesh : numpy.ndarray
         Triangular mesh represented by an array of shape (number of triangles,
         3, 3) where the second dimension indices correspond to different
-        triangle points and the third dimension representes the cartesian
+        triangle points and the third dimension representes the Cartesian
         coordinates.
     N : int
-        Number of subvoxels along each cartesian coordinate axis.
+        Number of subvoxels along each Cartesian coordinate axis.
 
     Returns
     -------
-    sv_borders : ndarray
+    sv_borders : numpy.ndarray
         Array of shape (3, N + 1) representing the boundaries between the
-        subvoxels along cartesian coordinate axes.
+        subvoxels along Cartesian coordinate axes.
     """
     voxel_min = np.min(np.min(mesh, 0), 0)
     voxel_max = np.max(np.max(mesh, 0), 0)
@@ -123,11 +122,11 @@ def _mesh_space_subdivision(mesh, N=20):
 
 @numba.jit()
 def _interval_sv_overlap_1d(xs, x1, x2):
-    """Return indices of subvoxels that overlap with interval [x1, x2].
+    """Return the indices of subvoxels that overlap with interval [x1, x2].
 
     Parameters
     ----------
-    xs : array_like
+    xs : numpy.ndarray
         Array of subvoxel boundaries.
     x1 : float
         Start/end point of the interval.
@@ -171,20 +170,20 @@ def _subvoxel_to_triangle_mapping(mesh, sv_borders):
 
     Parameters
     ----------
-    mesh : ndarray
+    mesh : numpy.ndarray
         Triangular mesh represented by an array of shape (number of triangles,
         3, 3) where the second dimension indices correspond to different
-        triangle points and the third dimension representes the cartesian
+        triangle points and the third dimension representes the Cartesian
         coordinates.
-    sv_borders : ndarray
+    sv_borders : numpy.ndarray
         Array of shape (3, N + 1) representing the boundaries between the
         subvoxels along cartesian coordinate axes.
 
     Returns
     -------
-    tri_indices : array_like
+    tri_indices : numpy.ndarray
         1D array containing the relevant triangle indices for all subvoxels.
-    sv_mapping : ndarray
+    sv_mapping : numpy.ndarray
         2D array that allows the relevant triangle indices of a given subvoxel
         to be located in the array tri_indices. The relevant triangle indices
         for subvoxel i are tri_indices[sv_mapping[i, 0]:sv_mapping[i, 1]].
@@ -249,16 +248,16 @@ def _triangle_intersection_check(A, B, C, r0, step):
 
     Parameters
     ----------
-    A : array_like
+    A : numpy.ndarray
         1D array of length 3 defining a point of the triangle.
-    B : array_like
+    B : numpy.ndarray
         1D array of length 3 defining a point of the triangle.
-    C : array_like
+    C : numpy.ndarray
         1D array of length 3 defining a point of the triangle.
-    r0 : array_like
+    r0 : numpy.ndarray
         1D array of length 3 defining the point from which the distance to the
         triangle is calculated.
-    step : array_like
+    step : numpy.ndarray
         1D array of length 3 defining the direction of the ray.
 
     Return
@@ -298,17 +297,17 @@ def _fill_mesh(n_s, mesh, sv_borders, tri_indices, sv_mapping, intra, extra,
     ----------
     n_s : int
         Number of points.
-    mesh : ndarray
+    mesh : numpy.ndarray
         Triangular mesh represented by an array of shape (number of triangles,
         3, 3) where the second dimension indices correspond to different
-        triangle points and the third dimension representes the cartesian
+        triangle points and the third dimension representes the Cartesian
         coordinates.
-    sv_borders : ndarray
+    sv_borders : numpy.ndarray
         Array of shape (3, N + 1) representing the boundaries between the
         subvoxels along cartesian coordinate axes.
-    tri_indices : array_like
+    tri_indices : numpy.ndarray
         1D array containing the relevant triangle indices for all subvoxels.
-    sv_mapping : ndarray
+    sv_mapping : numpy.ndarray
         2D array that allows the relevant triangle indices of a given subvoxel
         to be located in the array tri_indices. The relevant triangle indices
         for subvoxel i are tri_indices[sv_mapping[i, 0]:sv_mapping[i, 1]].
@@ -321,7 +320,7 @@ def _fill_mesh(n_s, mesh, sv_borders, tri_indices, sv_mapping, intra, extra,
 
     Returns
     -------
-    positions : ndarray
+    positions : numpy.ndarray
         Array of shape (n_s, 3) containing the calculated positions.
     """
     if (not intra) and (not extra):

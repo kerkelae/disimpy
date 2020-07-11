@@ -495,7 +495,7 @@ def add_noise_to_data(data, sigma, seed=123):
 
     Parameters
     ----------
-    data : ndarray
+    data : numpy.ndarray
         Array containing the data.
     sigma : float
         Standard deviation of noise in each channel.
@@ -504,7 +504,7 @@ def add_noise_to_data(data, sigma, seed=123):
 
     Returns
     -------
-    noisy_data : ndarray
+    noisy_data : numpy.ndarray
         Noisy data.
     """
     np.random.seed(seed)
@@ -516,18 +516,16 @@ def add_noise_to_data(data, sigma, seed=123):
 
 def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
                trajectories=None, quiet=False, cuda_bs=128):
-    """Execute a dMRI simulation.
-
-    For a detailed tutorial, please see the documentation at
-    https://disimpy.readthedocs.io/en/latest/tutorial.html
+    """Execute a dMRI simulation. For a detailed tutorial, please see the
+    documentation at https://disimpy.readthedocs.io/en/latest/tutorial.html.
 
     Parameters
     ----------
     n_spins : int
-        Number of random walkers in the simulation.
+        Number of random walkers.
     diffusivity : float
         Diffusivity in SI units (m^2/s).
-    gradient : ndarray
+    gradient : numpy.ndarray
         Gradient array of shape (n of measurements, n of time points, 3). Array
         elements are floats representing the gradient magnitude at that time
         point in SI units (T/m).
@@ -538,16 +536,16 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
     seed : int, optional
         Seed for pseudorandom number generation.
     trajectories : str, optional
-        Path to file in which to save trajectories. Resulting file can be very
-        large!
+        Path of a file in which to save the simulated trajectories. Resulting
+        file can be very large!
     quiet : bool, optional
-        Define whether to print messages about simulation progression.
+        Whether to print messages about simulation progression.
     cuda_bs : int, optional
-        The size of the cuda thread block (1D).
+        The size of the CUDA thread block (1D).
 
     Returns
     -------
-    signal : array_like
+    signal : numpy.ndarray
         Simulated signal(s).
     """
 

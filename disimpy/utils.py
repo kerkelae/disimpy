@@ -6,18 +6,18 @@ from mpl_toolkits.mplot3d import Axes3D
 
 
 def vec2vec_rotmat(v, k):
-    """Return rotation matrix defining a rotation that aligns v with k.
+    """Return a rotation matrix defining a rotation that aligns v with k.
 
     Parameters
     -----------
-    v : array_like
+    v : numpy.ndarray
         1D array of length 3.
-    k : array_like
+    k : numpy.ndarray
         1D array of length.
 
     Returns
     ---------
-    R : ndarray
+    R : numpy.ndarray
         3 by 3 rotation matrix.
     """
     axis = np.cross(v, k).astype(np.float)

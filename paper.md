@@ -139,7 +139,7 @@ $l$.
 
 # Figures
 
-![Performance comparison between Disimpy and Camino, a popular dMRI simulator that runs on the CPU. The comparison was performed on a desktop computer with an Intel Xeon E5-1620 3.50 GHz x 8 CPU and an Nvidia Quadro K620 GPU. The simulations were performed using a mesh consisting of $10^4$ triangles, shown in \autoref{fig:2}.\label{fig:1}](paper_figure_1.png)
+![Performance comparison between Disimpy and Camino, a popular dMRI simulator that runs on the CPU. The comparison was performed on a desktop computer with an Intel Xeon E5-1620 v3 3.50 GHz x 8 CPU and an Nvidia Quadro K620 GPU. The simulations were performed using a mesh consisting of $10^4$ triangles, shown in \autoref{fig:2}.\label{fig:1}](paper_figure_1.png)
 
 ![Example of diffusion in an environment defined by a triangular mesh. (A) Example mesh of $10^4$ triangles defining the synthetic voxel consisting of 100 spheres with gamma distributed radii. Mesh kindly provided by Gyori [@gyori:2020]⁠. (B) Example trajectories of 100 random walkers whose initial positions were randomly positioned inside the spheres. Some spheres contain more than one walker. (C) Example trajectories of 100 random walkers outside the spheres.\label{fig:2}](paper_figure_2.png)
 

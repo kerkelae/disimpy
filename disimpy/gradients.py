@@ -12,11 +12,11 @@ from .simulations import GAMMA
 
 
 def interpolate_gradient(gradient, dt, n_t):
-    """Interpolate gradient array to have n_t time points.
+    """Interpolate the gradient array to have n_t time points.
 
     Parameters
     ----------
-    gradient : ndarray
+    gradient : numpy.ndarray
         Gradient array of shape (n of measurements, n of time points, 3).
     dt : float
         Duration of time step in gradient array.
@@ -25,7 +25,7 @@ def interpolate_gradient(gradient, dt, n_t):
 
     Returns
     -------
-    interp_g : ndarray
+    interp_g : numpy.ndarray
         Interpolated gradient array.
     dt : float
         Duration of time step in the interpolated gradient array.
@@ -43,18 +43,18 @@ def interpolate_gradient(gradient, dt, n_t):
 
 
 def calc_q(gradient, dt):
-    """Calculate q-vector array corresponding to gradient array.
+    """Calculate the q-vector array corresponding to the gradient array.
 
     Parameters
     ----------
-    gradient : ndarray
+    gradient : numpy.ndarray
         Gradient array of shape (n of measurements, n of time points, 3).
     dt : float
         Duration of time step in gradient array.
 
     Returns
     -------
-    q : ndarray
+    q : numpy.ndarray
         q-vector array.
     """
     q = GAMMA * scipy.integrate.cumtrapz(gradient, axis=1, dx=dt, initial=0)
@@ -62,18 +62,18 @@ def calc_q(gradient, dt):
 
 
 def calc_b(gradient, dt):
-    """Calculate b-value(s) corresponding to gradient array.
+    """Calculate b-value(s) of the gradient array.
 
     Parameters
     ----------
-    gradient : ndarray
+    gradient : numpy.ndarray
         Gradient array of shape (n of measurements, n of time points, 3).
     dt : float
         Duration of time step in gradient array.
 
     Returns
     -------
-    q : array_like
+    q : numpy.ndarray
         b-value(s).
     """
     q = calc_q(gradient, dt)
@@ -82,32 +82,34 @@ def calc_b(gradient, dt):
 
 
 def set_b(gradient, dt, b):
-    """Scale gradient array to have given b-value(s)
+    """Scale the gradient array magnitude to correspond to given b-value(s).
 
     Parameters
     ----------
-    gradient : ndarray
+    gradient : numpy.ndarray
         Gradient array of shape (n of measurements, n of time points, 3).
     dt : float
         Duration of time step in gradient array.
-    b : array_like
-        b-value or a list of b-values with length equal to n of measurements.
+    b : float or numpy.ndarray
+        b-value or an array of b-values with length equal to n of measurements.
 
     Returns
     -------
-    g : ndarray
-        Scaled gradient array with chosen b-value(s).
+    g : numpy.ndarray
+        Scaled gradient array with magnitude equal to given b-value(s).
     """
     if np.any(b == 0):
         raise ValueError('b can not be equal to 0. If b = 0, the simulated'
-                         + 'signal is equal to the number of random walkers.')
+                         + 'signal is simply equal to the number of random'
+                         + ' walkers.')
     ratio = b / calc_b(gradient, dt)
     gradient *= np.sqrt(ratio)[:, np.newaxis, np.newaxis]
     return gradient
 
 
 def rotate_gradient(gradient, Rs):
-    """Rotate gradient array with rotation matrix array.
+    """Rotate the gradient array with rotation matrix array. The gradient array
+    of each measurement is rotated by the corresponding rotation matrix.
 
     Parameters
     ----------

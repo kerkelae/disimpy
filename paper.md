@@ -96,7 +96,7 @@ field gradients which render the signal sensitive to diffusion. During the
 experiment, the spin of a nucleus experiences a path-dependent phase shift given
 by
 \begin{equation}\label{eq:1}
-\phi(t) = \gamma \int_0^t \mathbf{B}_0 + \mathbf{G}(t) \cdot \mathbf{r}(t) dt ,
+\phi(t) = \gamma \int_0^t \mathbf{B}_0 + \mathbf{G}(t')\cdot\mathbf{r}(t') dt' ,
 \end{equation}
 where $\gamma$ is the gyromagnetic ratio of the nucleus, $\mathbf{B}_0$ is the
 static main magnetic field of the scanner, $\mathbf{G}(t)$ is the diffusion

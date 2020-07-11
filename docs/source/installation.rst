@@ -39,7 +39,7 @@ Installation
 To avoid possible issues with automatic installation of some of the
 dependencies, we recommend installing Disimpy in a virtual environment or a
 conda environment. Disimpy can be installed by downloading the source code from
-`here <https://github.com/kerkelae/disimpy/archive/master.zip>`_. Extract the
+`here <https://github.com/kerkelae/disimpy/archive/v0.1.zip>`_. Extract the
 downloaded .zip file, navigate into the extracted directory, and install
 with pip: ::
 

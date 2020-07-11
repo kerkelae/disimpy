@@ -17,7 +17,7 @@ and be documented following the `Numpy docstring conventions
 <https://numpydoc.readthedocs.io/en/latest/format.html>`_ (except obvious
 internal functions). Your code should also have accompanying unit tests in the
 corresponding test module. It is important to make sure that your changes have
-not broken anything by running all tests with: ::
+not broken anything by running all tests with:
 
 .. code-block:: python
 

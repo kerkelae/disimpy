@@ -14,13 +14,13 @@ Requirements and installation
 #############################
 
 Please follow the `installation instructions
-<https://disimpy.readthedocs.io/en/latest/installation.html>`_.
+<https://disimpy.readthedocs.io/installation.html>`_.
     
 Usage example
 #############
 
 Please read the `tutorial
-<https://disimpy.readthedocs.io/en/latest/tutorial.html>`_ to learn how to use
+<https://disimpy.readthedocs.io/tutorial.html>`_ to learn how to use
 Disimpy.
 
 Contribute
@@ -28,7 +28,7 @@ Contribute
 
 If you want to contribute to the development of Disimpy or inform the developers
 about problems or bugs, please read the `contributing guidelines
-<https://disimpy.readthedocs.io/en/latest/contributing.html>`_.
+<https://disimpy.readthedocs.io/contributing.html>`_.
 
 References
 ==========

@@ -6,7 +6,7 @@
 
 # Sphinx
 _build
-_static
+# _static
 _templates
 
 # Cuda

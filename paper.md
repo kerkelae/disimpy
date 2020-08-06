@@ -59,14 +59,14 @@ computers without needing to access high performance computing clusters.
 Disimpy uses efficient numerical methods from Numpy [@walt:2011]⁠ and Scipy
 [@virtanen:2020]⁠. Numba [@lam:2015]⁠ is used to compile Python code into
 CUDA kernels and device functions [@nickolls:2008]⁠ which are executed on the
-GPU. The random walker steps are generated in massively parallel on individual
-threads of one-dimensional CUDA blocks, resulting in a performance gain of over
-an order of magnitude when compared to Camino [@hall:2009]⁠⁠, a popular dMRI
-simulator written in Java (\autoref{fig:1}). Given that random walker Monte
-Carlo dMRI simulations require at least $10^4$ random walkers for sufficient
-convergence [@hall:2009]⁠, it is important that Disimpy's runtime does not
-linearly depend on the number of random walkers until the number of walkers is
-in the thousands or tens of thousands, depending on the GPU.
+GPU. The random walker steps are generated in a massively parallel fashion on
+individual threads of one-dimensional CUDA blocks, resulting in a performance
+gain of over an order of magnitude when compared to Camino [@hall:2009]⁠⁠, a
+popular dMRI simulator written in Java (\autoref{fig:1}). Given that random
+walker Monte Carlo dMRI simulations require at least $10^4$ random walkers for
+sufficient convergence [@hall:2009]⁠, it is important that Disimpy's runtime does
+not linearly depend on the number of random walkers until the number of walkers
+is in the thousands or tens of thousands, depending on the GPU.
 
 Diffusion can be simulated without restrictions, inside analytically defined
 geometries (cylinders, spheres, ellipsoids), and in arbitrary geometries defined

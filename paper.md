@@ -46,7 +46,8 @@ study of tissue microstructure *in vivo* by probing the displacements of water
 molecules [@behrens:2009]⁠. It has become a standard tool in neuroscience
 [@assaf:2019]⁠, and a large number of data acquisition and analysis methods have
 been developed to tackle the difficult inverse problem of inferring
-microstructural properties of tissue from the dMRI signal [@novikov:2019]⁠. 
+microstructural properties of tissue from the dMRI signal [@novikov:2019]⁠.
+
 Simulations have played an important role in the development of the field
 because they do not require the use of expensive scanner time and they provide a
 powerful tool for investigating the accuracy and precision of new methods, e.g.,
@@ -55,12 +56,14 @@ inside some geometry to obtain a solution to the diffusion equation, e.g.,
 [@li:2019; @ianus:2016], or modelling diffusion using a more generalizable Monte
 Carlo approach, e.g., [@hall:2009]. The Monte Carlo method enables the use of
 complex and realistic tissue microstructure models, e.g., [@callaghan:2020], and
-can be significantly accelerated using GPU computing
-[@nguyen:2018; @rafael:2020]. Here, we present Disimpy, a GPU-accelerated dMRI
-simulator that enables a large amount of synthetic data to be generated on
-standard desktop and laptop computers without needing to access high performance
-computing clusters. Disimpy is written in Python, making its source code very
-approachable to researchers with no prior experience in GPU computing.
+can be significantly accelerated using GPU computing like in
+[@nguyen:2018; @rafael:2020].
+
+Here, we present Disimpy, a GPU-accelerated dMRI simulator that enables a large
+amount of synthetic data to be generated on standard desktop and laptop
+computers without needing to access high performance computing clusters. Disimpy
+is written in Python, making its source code very approachable to researchers
+with no prior experience in GPU computing.
 
 # Features
 

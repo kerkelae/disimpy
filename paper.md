@@ -56,10 +56,11 @@ inside some geometry to obtain a solution to the diffusion equation, e.g.,
 Carlo approach, e.g., [@hall:2009]. The Monte Carlo method enables the use of
 complex and realistic tissue microstructure models, e.g., [@callaghan:2020], and
 can be significantly accelerated using GPU computing
-[@nguyen:2018; rafael:2020]. Here, we present a GPU-accelerated dMRI simulator
-that enables a large amount of synthetic data to be generated on standard
-desktop and laptop computers without needing to access high performance
-computing clusters.
+[@nguyen:2018; @rafael:2020]. Here, we present Disimpy, a GPU-accelerated dMRI
+simulator that enables a large amount of synthetic data to be generated on
+standard desktop and laptop computers without needing to access high performance
+computing clusters. Disimpy is written in Python, making its source code very
+approachable to researchers with no prior experience in GPU computing.
 
 # Features
 

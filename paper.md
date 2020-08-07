@@ -46,7 +46,8 @@ study of tissue microstructure *in vivo* by probing the displacements of water
 molecules [@behrens:2009]⁠. It has become a standard tool in neuroscience
 [@assaf:2019]⁠, and a large number of data acquisition and analysis methods have
 been developed to tackle the difficult inverse problem of inferring
-microstructural properties of tissue from the dMRI signal [@novikov:2019]⁠. 
+microstructural properties of tissue from the dMRI signal [@novikov:2019]⁠.
+
 Simulations have played an important role in the development of the field
 because they do not require the use of expensive scanner time and they provide a
 powerful tool for investigating the accuracy and precision of new methods, e.g.,
@@ -55,12 +56,14 @@ inside some geometry to obtain a solution to the diffusion equation, e.g.,
 [@li:2019; @ianus:2016], or modelling diffusion using a more generalizable Monte
 Carlo approach, e.g., [@hall:2009]. The Monte Carlo method enables the use of
 complex and realistic tissue microstructure models, e.g., [@callaghan:2020], and
-can be significantly accelerated using GPU computing
-[@nguyen:2018; @rafael:2020]. Here, we present Disimpy, a GPU-accelerated dMRI
-simulator that enables a large amount of synthetic data to be generated on
-standard desktop and laptop computers without needing to access high performance
-computing clusters. Disimpy is written in Python, making its source code very
-approachable to researchers with no prior experience in GPU computing.
+can be significantly accelerated using GPU computing, e.g.,
+[@nguyen:2018; @rafael:2020].
+
+Here, we present Disimpy, a GPU-accelerated dMRI simulator that enables a large
+amount of synthetic data to be generated on standard desktop and laptop
+computers without needing to access high performance computing clusters. Disimpy
+is written in Python, making its source code very approachable to researchers
+with no prior experience in GPU computing.
 
 # Features
 
@@ -147,7 +150,7 @@ $l$.
 
 # Figures
 
-![Performance comparison between Disimpy and Camino, a popular dMRI simulator that runs on the CPU. The comparison was performed on a desktop computer with an Intel Xeon E5-1620 v3 3.50 GHz x 8 CPU and an Nvidia Quadro K620 GPU. The simulations were performed using a mesh consisting of $10^4$ triangles, shown in \autoref{fig:2}.\label{fig:1}](paper_figure_1.png)
+![Performance comparison between Disimpy and Camino, a popular dMRI simulator that runs single-threaded on the CPU. The comparison was performed on a desktop computer with an Intel Xeon E5-1620 v3 3.50 GHz x 8 CPU and an Nvidia Quadro K620 GPU. The simulations were performed using a mesh consisting of $10^4$ triangles, shown in \autoref{fig:2}.\label{fig:1}](paper_figure_1.png)
 
 ![Example of diffusion in an environment defined by a triangular mesh. (A) Example mesh of $10^4$ triangles defining the synthetic voxel consisting of 100 spheres with gamma distributed radii. Mesh kindly provided by Gyori [@gyori:2020]⁠. (B) Example trajectories of 100 random walkers whose initial positions were randomly positioned inside the spheres. Some spheres contain more than one walker. (C) Example trajectories of 100 random walkers outside the spheres.\label{fig:2}](paper_figure_2.png)
 

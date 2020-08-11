@@ -40,12 +40,12 @@ To avoid possible issues with automatic installation of some of the
 dependencies, we recommend installing Disimpy in a virtual environment or a
 conda environment. Disimpy can be installed with pip by executing: ::
 
-    pip install https://github.com/kerkelae/disimpy/archive/v0.1.tar.gz
+    pip install git+https://github.com/kerkelae/disimpy.git
 
 Alternatively, given that the requirements specified above are met, you can use
 Disimpy without installing by directly importing the functions you want to use
 from the directory you can download
-`here <https://github.com/kerkelae/disimpy/archive/v0.1.zip>`_.
+`here <https://github.com/kerkelae/disimpy/archive/master.zip>`_.
 
 Automated tests
 ###############

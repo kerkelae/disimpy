@@ -1,5 +1,5 @@
 ---
-title: 'Disimpy: A massively parallel Monte Carlo simulator for synthesizing diffusion-weighted MRI data in Python'
+title: 'Disimpy: A massively parallel Monte Carlo simulator for generating diffusion-weighted MRI data in Python'
 tags:
   - Python
   - diffusion MRI
@@ -27,7 +27,7 @@ bibliography: paper.bib
 
 # Summary
 
-Disimpy is a simulator for synthesizing diffusion-weighted magnetic resonance
+Disimpy is a simulator for generating diffusion-weighted magnetic resonance
 imaging (dMRI) data that is useful in the development and validation of new
 methods for data acquisition and analysis. Diffusion of water is modelled as an
 ensemble of random walkers whose trajectories are generated on an Nvidia (Nvidia

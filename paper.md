@@ -54,10 +54,10 @@ powerful tool for investigating the accuracy and precision of new methods, e.g.,
 [@tournier:2007]. Generally, dMRI simulations are based on modelling diffusion
 inside some geometry to obtain a solution to the diffusion equation, e.g.,
 [@li:2019; @ianus:2016], or modelling diffusion using a more generalizable Monte
-Carlo approach, e.g., [@hall:2009]. The Monte Carlo method enables the use of
-complex and realistic tissue microstructure models, e.g., [@callaghan:2020], and
-can be significantly accelerated using GPU computing, e.g.,
-[@nguyen:2018; @rafael:2020].
+Carlo approach, e.g., [@hall:2009 @rafael:2020]. The Monte Carlo method enables
+the use of complex and realistic tissue microstructure models, e.g.,
+[@callaghan:2020], and can be significantly accelerated using GPU computing,
+e.g., [@nguyen:2018].
 
 Here, we present Disimpy, a GPU-accelerated dMRI simulator that enables a large
 amount of synthetic data to be generated on standard desktop and laptop

@@ -33,4 +33,4 @@ References
 
 .. [1] Kerkelä et al., (2020). Disimpy: A massively parallel Monte Carlo
        simulator for generating diffusion-weighted MRI data in Python. Journal
-       of Open Source Software, 5(52), 2527.https://doi.org/10.21105/joss.02527
+       of Open Source Software, 5(52), 2527. https://doi.org/10.21105/joss.02527

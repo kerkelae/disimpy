@@ -5,7 +5,7 @@ with open('requirements.txt') as f:
 
 setup(
     name='disimpy',
-    version='0.1',
+    version='0.1.1',
     description='Diffusion MRI simulator running on CUDA GPUs.',
     url='https://github.com/kerkelae/disimpy',
     license='MIT',

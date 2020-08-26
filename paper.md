@@ -136,7 +136,7 @@ At every time point in the simulation, each walker accumulates phase given by
 d \phi = \gamma \mathbf{G}(t) \cdot \mathbf{r} (t) dt .
 \end{equation}
 At the end of the simulated dynamics, the normalized diffusion-weighted signal
-is calculated as the sum of signals from all random walkers
+is calculated as the sum of the real parts of signals from all random walkers
 \begin{equation}\label{eq:5}
 S = \sum_{j=1}^N \text{Re} \left( \exp \left( i \phi_j \right) \right) ,
 \end{equation}

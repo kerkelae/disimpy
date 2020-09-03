@@ -2,6 +2,9 @@
 Disimpy
 *******
 
+.. image:: https://joss.theoj.org/papers/10.21105/joss.02527/status.svg
+   :target: https://doi.org/10.21105/joss.02527
+
 Disimpy is a tool for generating synthetic diffusion magnetic resonance imaging
 data that is useful in the development and validation of new data acquisition
 and analysis methods. The synthetic data is generated using massively

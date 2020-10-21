@@ -12,10 +12,7 @@ from numba.cuda.random import (create_xoroshiro128p_states,
                                xoroshiro128p_uniform_float64)
 
 from . import utils, meshes
-from .settings import EPSILON, MAX_ITER
-
-
-GAMMA = 267.513e6
+from .settings import EPSILON, MAX_ITER, GAMMA
 
 
 @cuda.jit(device=True)
@@ -53,7 +50,7 @@ def _cuda_random_step(step, rng_states, thread_id):
 
 @cuda.jit(device=True)
 def _cuda_mat_mul(R, v):
-    """Multiply 1D array v of length 3 by a 3 x 3 matrix R."""
+    """Multiply 1D array v of length 3 by matrix R of size 3 x 3."""
     rotated_v = cuda.local.array(3, numba.double)
     rotated_v[0] = R[0, 0] * v[0] + R[0, 1] * v[1] + R[0, 2] * v[2]
     rotated_v[1] = R[1, 0] * v[0] + R[1, 1] * v[1] + R[1, 2] * v[2]
@@ -238,7 +235,7 @@ def ll_subvoxel_overlap_1d(xs, x1, x2):
 
 @cuda.jit(device=True)
 def ul_subvoxel_overlap_1d(xs, x1, x2):
-    """For an interval [xmin, xmax], return the index of the upper limit of the
+    """For an interval [x1, x2], return the index of the upper limit of the
     overlapping subvoxels whose borders are defined by the elements of xs."""
     xmax = max(x1, x2)
     if xmax >= xs[-1]:
@@ -253,6 +250,34 @@ def ul_subvoxel_overlap_1d(xs, x1, x2):
                 ul = i
                 return ul
         return len(xs) - 1
+
+
+@cuda.jit(device=True)
+def ll_subvoxel_overlap_1d_periodic(xs, x1, x2):
+    """For an interval [x1, x2], return the index of the lower limit of the
+    overlapping subvoxels whose borders are defined by the elements of xs. The
+    subvoxel division continues outside the voxel."""
+    xmin = min(x1, x2)
+    voxel_size = abs(xs[-1] - xs[0])
+    n = math.floor(xmin / voxel_size)  # How many voxel widths to shift
+    xmin_shifted = xmin - n * voxel_size
+    ll_shifted = ll_subvoxel_overlap_1d(xs, xmin_shifted, xmin_shifted)
+    ll = ll_shifted + n * (len(xs) - 1)
+    return ll
+
+
+@cuda.jit(device=True)
+def ul_subvoxel_overlap_1d_periodic(xs, x1, x2):
+    """For an interval [x1, x2], return the index of the upper limit of the
+    overlapping subvoxels whose borders are defined by the elements of xs. The
+    subvoxel division continues outside the voxel."""
+    xmax = max(x1, x2)
+    voxel_size = abs(xs[-1] - xs[0])
+    n = math.floor(xmax / voxel_size)  # How many voxel widths to shift
+    xmax_shifted = xmax - n * voxel_size
+    ul_shifted = ul_subvoxel_overlap_1d(xs, xmax_shifted, xmax_shifted)
+    ul = ul_shifted + n * (len(xs) - 1)
+    return ul
 
 
 @cuda.jit()
@@ -393,7 +418,7 @@ def _cuda_step_ellipsoid(positions, g_x, g_y, g_z, phases, rng_states, t,
 @cuda.jit()
 def _cuda_step_mesh(positions, g_x, g_y, g_z, phases, rng_states, t, gamma,
                     step_l, dt, triangles, sv_borders, sv_mapping, tri_indices,
-                    voxel_triangles, iter_exc):
+                    voxel_triangles, iter_exc, periodic):
     """Kernel function for diffusion restricted by a triangular mesh."""
     thread_id = cuda.grid(1)
     if thread_id >= positions.shape[0]:
@@ -405,79 +430,141 @@ def _cuda_step_mesh(positions, g_x, g_y, g_z, phases, rng_states, t, gamma,
     N = sv_borders.shape[1] - 1  # Number of subvoxels along each axis
     iter_idx = 0
     check_intersection = True
-    while check_intersection and iter_idx < MAX_ITER:
-        iter_idx += 1
-        # Find relevant subvoxels for this step
-        x_ll = ll_subvoxel_overlap_1d(
-            sv_borders[0, :], r0[0], r0[0] + step[0] * step_l)
-        x_ul = ul_subvoxel_overlap_1d(
-            sv_borders[0, :], r0[0], r0[0] + step[0] * step_l)
-        y_ll = ll_subvoxel_overlap_1d(
-            sv_borders[1, :], r0[1], r0[1] + step[1] * step_l)
-        y_ul = ul_subvoxel_overlap_1d(
-            sv_borders[1, :], r0[1], r0[1] + step[1] * step_l)
-        z_ll = ll_subvoxel_overlap_1d(
-            sv_borders[2, :], r0[2], r0[2] + step[2] * step_l)
-        z_ul = ul_subvoxel_overlap_1d(
-            sv_borders[2, :], r0[2], r0[2] + step[2] * step_l)
-        # Loop over relevant subvoxels
-        min_d = math.inf
-        min_idx = 0
-        for x in range(x_ll, x_ul):
-            for y in range(y_ll, y_ul):
-                for z in range(z_ll, z_ul):
-                    sv_idx = x * N**2 + y * N + z
-                    # Find relevant triangles for this subvoxel
-                    ll = sv_mapping[sv_idx, 0]
-                    ul = sv_mapping[sv_idx, 1]
-                    # Loop over relevant triangles
-                    for i in range(ll, ul):
-                        tri_idx = tri_indices[i] * 9
-                        A = triangles[tri_idx:tri_idx + 3]
-                        B = triangles[tri_idx + 3:tri_idx + 6]
-                        C = triangles[tri_idx + 6:tri_idx + 9]
-                        d = _cuda_ray_triangle_intersection_check(
-                            A, B, C, r0, step)
-                        if d > 0 and d < min_d:
-                            min_d = d
-                            min_idx = tri_idx
-        # Check if step intersects with closest triangle
-        if min_d < step_l:
-            A = triangles[min_idx:min_idx + 3]
-            B = triangles[min_idx + 3:min_idx + 6]
-            C = triangles[min_idx + 6:min_idx + 9]
-            normal = cuda.local.array(3, numba.double)
-            normal[0] = ((B[1] - A[1]) * (C[2] - A[2]) -
-                         (B[2] - A[2]) * (C[1] - A[1]))
-            normal[1] = ((B[2] - A[2]) * (C[0] - A[0]) -
-                         (B[0] - A[0]) * (C[2] - A[2]))
-            normal[2] = ((B[0] - A[0]) * (C[1] - A[1]) -
-                         (B[1] - A[1]) * (C[0] - A[0]))
-            _cuda_normalize_vector(normal)
-            _cuda_reflection(r0, step, min_d, normal)
-            step_l -= min_d
-        else:
-            # Check that walker does not cross voxel boundary
-            for i in range(0, 12):
-                tri_idx = i * 9
-                A = voxel_triangles[tri_idx:tri_idx + 3]
-                B = voxel_triangles[tri_idx + 3:tri_idx + 6]
-                C = voxel_triangles[tri_idx + 6:tri_idx + 9]
-                d = _cuda_ray_triangle_intersection_check(A, B, C, r0, step)
-                if d > 0 and d < step_l:
-                    normal = cuda.local.array(3, numba.double)
-                    normal[0] = ((B[1] - A[1]) * (C[2] - A[2]) -
-                                 (B[2] - A[2]) * (C[1] - A[1]))
-                    normal[1] = ((B[2] - A[2]) * (C[0] - A[0]) -
-                                 (B[0] - A[0]) * (C[2] - A[2]))
-                    normal[2] = ((B[0] - A[0]) * (C[1] - A[1]) -
-                                 (B[1] - A[1]) * (C[0] - A[0]))
-                    _cuda_normalize_vector(normal)
-                    _cuda_reflection(r0, step, d, normal)
-                    step_l -= d
-                    break
-                elif i == 11:
-                    check_intersection = False
+    if periodic:  # Periodic boundary conditions
+        shifts = cuda.local.array(3, numba.double)
+        temp_shifts = cuda.local.array(3, numba.double)
+        for i in range(3):
+            temp_shifts[i] = 0
+        lls = cuda.local.array(3, numba.double)
+        uls = cuda.local.array(3, numba.double)
+        while check_intersection and iter_idx < MAX_ITER:
+            iter_idx += 1
+            min_d = math.inf
+            min_idx = 0
+            for i in range(3):  # Find relevant subvoxels
+                lls[i] = ll_subvoxel_overlap_1d_periodic(
+                    sv_borders[i, :], r0[i], r0[i] + step[i] * step_l)
+                uls[i] = ul_subvoxel_overlap_1d_periodic(
+                    sv_borders[i, :], r0[i], r0[i] + step[i] * step_l)
+            for x in range(lls[0], uls[0]):  # Loop over relevant subvoxels
+                if x < 0 or x > N - 1:
+                    shift_n = math.floor(x / N)
+                    x -= int(shift_n) * N
+                    temp_shifts[0] = shift_n * sv_borders[0, -1]
+                for y in range(lls[1], uls[1]):
+                    if y < 0 or y > N - 1:
+                        shift_n = math.floor(y / N)
+                        y -= int(shift_n) * N
+                        temp_shifts[1] = shift_n * sv_borders[1, -1]
+                    for z in range(lls[2], uls[2]):
+                        if z < 0 or z > N - 1:
+                            shift_n = math.floor(z / N)
+                            z -= int(shift_n) * N
+                            temp_shifts[2] = shift_n * sv_borders[2, -1]
+                        sv_idx = x * N**2 + y * N + z
+                        # Loop over relevant triangles
+                        for i in range(sv_mapping[sv_idx, 0],
+                                       sv_mapping[sv_idx, 1]):
+                            tri_idx = tri_indices[i] * 9
+                            A = triangles[tri_idx:tri_idx + 3]
+                            B = triangles[tri_idx + 3:tri_idx + 6]
+                            C = triangles[tri_idx + 6:tri_idx + 9]
+                            for j in range(3):
+                                A[j] += temp_shifts[j]
+                                B[j] += temp_shifts[j]
+                                C[j] += temp_shifts[j]
+                            d = _cuda_ray_triangle_intersection_check(
+                                A, B, C, r0, step)
+                            if d > 0 and d < min_d:
+                                min_d = d
+                                min_idx = tri_idx
+                                for j in range(3):
+                                    shifts[j] = temp_shifts[j]
+            if min_d < step_l:  # Step intersects with closest triangle
+                A = triangles[min_idx:min_idx + 3]
+                B = triangles[min_idx + 3:min_idx + 6]
+                C = triangles[min_idx + 6:min_idx + 9]
+                for i in range(3):
+                    A[i] += shifts[i]
+                    B[i] += shifts[i]
+                    C[i] += shifts[i]
+                normal = cuda.local.array(3, numba.double)
+                normal[0] = ((B[1] - A[1]) * (C[2] - A[2]) -
+                             (B[2] - A[2]) * (C[1] - A[1]))
+                normal[1] = ((B[2] - A[2]) * (C[0] - A[0]) -
+                             (B[0] - A[0]) * (C[2] - A[2]))
+                normal[2] = ((B[0] - A[0]) * (C[1] - A[1]) -
+                             (B[1] - A[1]) * (C[0] - A[0]))
+                _cuda_normalize_vector(normal)
+                _cuda_reflection(r0, step, min_d, normal)
+                step_l -= min_d
+            else:
+                check_intersection = False
+
+    else:  # Reflective boundary conditions
+        lls = cuda.local.array(3, numba.double)
+        uls = cuda.local.array(3, numba.double)
+        while check_intersection and iter_idx < MAX_ITER:
+            iter_idx += 1
+            min_d = math.inf
+            min_idx = 0
+            for i in range(3):  # Find relevant subvoxels
+                lls[i] = ll_subvoxel_overlap_1d(
+                    sv_borders[i, :], r0[i], r0[i] + step[i] * step_l)
+                uls[i] = ul_subvoxel_overlap_1d(
+                    sv_borders[i, :], r0[i], r0[i] + step[i] * step_l)
+            for x in range(lls[0], uls[0]):  # Loop over relevant subvoxels
+                for y in range(lls[1], uls[1]):
+                    for z in range(lls[2], uls[2]):
+                        sv_idx = x * N**2 + y * N + z
+                        # Loop over relevant triangles
+                        for i in range(sv_mapping[sv_idx, 0],
+                                       sv_mapping[sv_idx, 1]):
+                            tri_idx = tri_indices[i] * 9
+                            A = triangles[tri_idx:tri_idx + 3]
+                            B = triangles[tri_idx + 3:tri_idx + 6]
+                            C = triangles[tri_idx + 6:tri_idx + 9]
+                            d = _cuda_ray_triangle_intersection_check(
+                                A, B, C, r0, step)
+                            if d > 0 and d < min_d:
+                                min_d = d
+                                min_idx = tri_idx
+            if min_d < step_l:  # Step intersects with closest triangle
+                A = triangles[min_idx:min_idx + 3]
+                B = triangles[min_idx + 3:min_idx + 6]
+                C = triangles[min_idx + 6:min_idx + 9]
+                normal = cuda.local.array(3, numba.double)
+                normal[0] = ((B[1] - A[1]) * (C[2] - A[2]) -
+                             (B[2] - A[2]) * (C[1] - A[1]))
+                normal[1] = ((B[2] - A[2]) * (C[0] - A[0]) -
+                             (B[0] - A[0]) * (C[2] - A[2]))
+                normal[2] = ((B[0] - A[0]) * (C[1] - A[1]) -
+                             (B[1] - A[1]) * (C[0] - A[0]))
+                _cuda_normalize_vector(normal)
+                _cuda_reflection(r0, step, min_d, normal)
+                step_l -= min_d
+            else:
+                for i in range(0, 12):  # Check that walker doesn't leave voxel
+                    tri_idx = i * 9
+                    A = voxel_triangles[tri_idx:tri_idx + 3]
+                    B = voxel_triangles[tri_idx + 3:tri_idx + 6]
+                    C = voxel_triangles[tri_idx + 6:tri_idx + 9]
+                    d = _cuda_ray_triangle_intersection_check(
+                        A, B, C, r0, step)
+                    if d > 0 and d < step_l:
+                        normal = cuda.local.array(3, numba.double)
+                        normal[0] = ((B[1] - A[1]) * (C[2] - A[2]) -
+                                     (B[2] - A[2]) * (C[1] - A[1]))
+                        normal[1] = ((B[2] - A[2]) * (C[0] - A[0]) -
+                                     (B[0] - A[0]) * (C[2] - A[2]))
+                        normal[2] = ((B[0] - A[0]) * (C[1] - A[1]) -
+                                     (B[1] - A[1]) * (C[0] - A[0]))
+                        _cuda_normalize_vector(normal)
+                        _cuda_reflection(r0, step, d, normal)
+                        step_l -= d
+                        break
+                    elif i == 11:
+                        check_intersection = False
     if iter_idx >= MAX_ITER:
         iter_exc[thread_id] = True
     for i in range(3):
@@ -572,13 +659,16 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
                          + ' float.')
     if ((not isinstance(gradient, np.ndarray)) or (gradient.ndim != 3) or
             (gradient.shape[2] != 3) or (gradient.dtype != float)):
-        raise ValueError('Incorrect value (%s) for parameter gradient.' % gradient
-                         + ' Gradient array must be a floating point array of'
-                         + ' shape (n of measurements, n of time points, 3).')
+        raise ValueError(
+            'Incorrect value (%s) for parameter gradient.' %
+            gradient +
+            ' Gradient array must be a floating point array of' +
+            ' shape (n of measurements, n of time points, 3).')
     if not (isinstance(dt, int) or isinstance(dt, float)) or (dt <= 0):
-        raise ValueError('Incorrect value (%s) for parameter dt which has to' % dt
-                         + ' be a positive integer or float.')
-    if (not isinstance(substrate, dict)) or (not 'type' in substrate.keys()):
+        raise ValueError(
+            'Incorrect value (%s) for parameter dt which has to' %
+            dt + ' be a positive integer or float.')
+    if (not isinstance(substrate, dict)) or ('type' not in substrate.keys()):
         raise ValueError('Incorrect value (%s) for parameter' % substrate
                          + ' substrate which has to be a dictionary with a key'
                          + ' \'type\' corresponding to one of the following'
@@ -589,8 +679,10 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
                          + ' has to be a non-negative integer.')
     if trajectories:
         if not isinstance(trajectories, str):
-            raise ValueError('Incorrect value (%s) for parameter' % trajectories
-                             + ' trajectories which has to be a string.')
+            raise ValueError(
+                'Incorrect value (%s) for parameter' %
+                trajectories +
+                ' trajectories which has to be a string.')
     if not isinstance(quiet, bool):
         raise ValueError('Incorrect value (%s) for parameter quiet' % quiet
                          + ' which has to be a boolean.')
@@ -662,8 +754,8 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
     elif substrate['type'] == 'cylinder':
 
         # Validate substrate dictionary
-        if ((not 'radius' in substrate.keys()) or
-                (not 'orientation' in substrate.keys())):
+        if (('radius' not in substrate.keys()) or
+                ('orientation' not in substrate.keys())):
             raise ValueError('Incorrect value (%s) for parameter' % substrate
                              + ' substrate which has to be a dictionary with'
                              + ' keys \'radius\' and \'orientation\' when'
@@ -671,8 +763,9 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
                              + ' cylinder.')
         radius = substrate['radius']
         if (not isinstance(radius, float)) or (radius <= 0):
-            raise ValueError('Incorrect value (%s) for cylinder radius' % radius
-                             + ' which has to be a positive float.')
+            raise ValueError(
+                'Incorrect value (%s) for cylinder radius' %
+                radius + ' which has to be a positive float.')
         orientation = substrate['orientation']
         if ((not isinstance(orientation, np.ndarray)) or
                 (not np.any(orientation.shape == np.array([3, (1, 3), (3, 1)],
@@ -718,7 +811,7 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
     elif substrate['type'] == 'sphere':
 
         # Validate substrate dictionary
-        if not 'radius' in substrate.keys():
+        if 'radius' not in substrate.keys():
             raise ValueError('Incorrect value (%s) for parameter' % substrate
                              + ' substrate which has to be a dictionary with'
                              + ' a key \'radius\' when simulating diffusion'
@@ -756,31 +849,34 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
     elif substrate['type'] == 'ellipsoid':
 
         # Validate substrate dictionary
-        if ((not 'a' in substrate.keys()) or (not 'b' in substrate.keys())
-                or (not 'c' in substrate.keys()) or
-                (not 'R' in substrate.keys())):
+        if (('a' not in substrate.keys()) or ('b' not in substrate.keys())
+                or ('c' not in substrate.keys()) or
+                ('R' not in substrate.keys())):
             raise ValueError('Incorrect value (%s) for parameter' % substrate
                              + ' substrate which has to be a dictionary with'
                              + ' keys \'a\', \'b\', \'c\' and \'R\' when'
                              + ' simulating diffusion inside an ellipsoid.')
         a = substrate['a']
         if (not isinstance(a, float)) or (a <= 0):
-            raise ValueError('Incorrect value (%s) for ellipsoid semiaxis a' % a
-                             + ' which has to be a positive float.')
+            raise ValueError(
+                'Incorrect value (%s) for ellipsoid semiaxis a' %
+                a + ' which has to be a positive float.')
         b = substrate['b']
         if (not isinstance(b, float)) or (b <= 0):
-            raise ValueError('Incorrect value (%s) for ellipsoid semiaxis b' % b
-                             + ' which has to be a positive float.')
+            raise ValueError(
+                'Incorrect value (%s) for ellipsoid semiaxis b' %
+                b + ' which has to be a positive float.')
         c = substrate['c']
         if (not isinstance(c, float)) or (c <= 0):
-            raise ValueError('Incorrect value (%s) for ellipsoid semiaxis c' % c
-                             + ' which has to be a positive float.')
+            raise ValueError(
+                'Incorrect value (%s) for ellipsoid semiaxis c' %
+                c + ' which has to be a positive float.')
         R = substrate['R']
         if ((not isinstance(R, np.ndarray)) or (R.shape != (3, 3)) or
                 (R.dtype != float)):
-            raise ValueError('Incorrect value (%s) for rotation matrix R' % R
-                             + ' which has to be a float array of shape (3, 3).'
-                             )
+            raise ValueError(
+                'Incorrect value (%s) for rotation matrix R' %
+                R + ' which has to be a float array of shape (3, 3).')
 
         # Calculate rotation from ellipsoid frame to lab frame
         R_inv = R[:]
@@ -799,10 +895,24 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
 
         # Run simulation
         for t in range(gradient.shape[1]):
-            _cuda_step_ellipsoid[gs, bs, stream](d_positions, d_g_x, d_g_y,
-                                                 d_g_z, d_phases, rng_states, t,
-                                                 GAMMA, step_l, dt, a, b, c, R,
-                                                 R_inv, d_iter_exc)
+            _cuda_step_ellipsoid[gs,
+                                 bs,
+                                 stream](d_positions,
+                                         d_g_x,
+                                         d_g_y,
+                                         d_g_z,
+                                         d_phases,
+                                         rng_states,
+                                         t,
+                                         GAMMA,
+                                         step_l,
+                                         dt,
+                                         a,
+                                         b,
+                                         c,
+                                         R,
+                                         R_inv,
+                                         d_iter_exc)
             stream.synchronize()
             if trajectories:
                 positions = d_positions.copy_to_host(stream=stream)
@@ -817,7 +927,7 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
     elif substrate['type'] == 'mesh':
 
         # Validate substrate dictionary
-        if not 'mesh' in substrate.keys():
+        if 'mesh' not in substrate.keys():
             raise ValueError('Incorrect value (%s) for parameter' % substrate
                              + ' substrate which has to be a dictionary with'
                              + ' at least a key \'mesh\', when simulating'
@@ -830,7 +940,7 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
                              + ' triangles, 3, 3).')
         intra = False
         extra = False
-        if (not 'intra' in substrate) and (not 'extra' in substrate):
+        if ('intra' not in substrate) and ('extra' not in substrate):
             intra = True
             extra = True
         if 'intra' in substrate:
@@ -852,11 +962,22 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
                                  + ' which has to be a positive integer.')
         else:
             N_sv = 20
+        if 'periodic' in substrate:
+            periodic = substrate['periodic']
+            if not isinstance(periodic, bool):
+                raise ValueError('Incorrect value (%s) for periodic' % periodic
+                                 + ' which has to be boolean.')
+        else:
+            periodic = False
 
         # Calculate subvoxel division
         if not quiet:
             print("Calculating subvoxel division.", end="\r")
         sv_borders = meshes._mesh_space_subdivision(mesh, N=N_sv)
+        if step_l > min(np.max(np.max(mesh, 0), 0)):
+            raise ValueError('Step length is too long for good results. ' +
+                             'Please increase number of time steps or lower' +
+                             'diffusivity.')
         tri_indices, sv_mapping = meshes._subvoxel_to_triangle_mapping(
             mesh, sv_borders)
         d_sv_borders = cuda.to_device(sv_borders, stream=stream)
@@ -892,7 +1013,7 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
                                             GAMMA, step_l, dt, d_triangles,
                                             d_sv_borders, d_sv_mapping,
                                             d_tri_indices, d_voxel_mesh,
-                                            d_iter_exc)
+                                            d_iter_exc, periodic)
             time.sleep(1e-3)
             stream.synchronize()
             if trajectories:

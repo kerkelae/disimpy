@@ -985,12 +985,22 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
         d_sv_mapping = cuda.to_device(sv_mapping, stream=stream)
 
         # Calculate initial positions
-        if not quiet:
-            print("Calculating initial positions.", end="\r")
-        positions = meshes._fill_mesh(n_spins, mesh, sv_borders, tri_indices,
-                                      sv_mapping, intra, extra)
-        if not quiet:
-            print("Finished calculating initial positions.")
+        if 'initial positions' in substrate:
+            print('Initialized random walker positions.')
+            positions = substrate['initial positions']
+            if (not isinstance(positions, np.ndarray) or
+                positions.shape != (n_spins, 3) or
+                positions.dtype != np.float):
+                raise ValueError('Incorrect value for initial positions which'
+                                 + 'has to be a float array of shape (n of '
+                                 + 'spins, 3).')
+        else:
+            if not quiet:
+                print("Calculating initial positions.", end="\r")
+            positions = meshes._fill_mesh(n_spins, mesh, sv_borders,
+                                          tri_indices, sv_mapping, intra, extra)
+            if not quiet:
+                print("Finished calculating initial positions.")
         if trajectories:
             with open(trajectories, 'w') as f:
                 [f.write(str(i) + ' ') for i in positions.ravel()]

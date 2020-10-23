@@ -433,8 +433,7 @@ def _cuda_step_mesh(positions, g_x, g_y, g_z, phases, rng_states, t, gamma,
     if periodic:  # Periodic boundary conditions
         shifts = cuda.local.array(3, numba.double)
         temp_shifts = cuda.local.array(3, numba.double)
-        for i in range(3):
-            temp_shifts[i] = 0
+        temp_r0 = cuda.local.array(3, numba.double)
         lls = cuda.local.array(3, numba.double)
         uls = cuda.local.array(3, numba.double)
         while check_intersection and iter_idx < MAX_ITER:
@@ -449,19 +448,27 @@ def _cuda_step_mesh(positions, g_x, g_y, g_z, phases, rng_states, t, gamma,
             for x in range(lls[0], uls[0]):  # Loop over relevant subvoxels
                 if x < 0 or x > N - 1:
                     shift_n = math.floor(x / N)
-                    x -= int(shift_n) * N
+                    x -= shift_n * N
                     temp_shifts[0] = shift_n * sv_borders[0, -1]
+                else:
+                    temp_shifts[0] = 0
                 for y in range(lls[1], uls[1]):
                     if y < 0 or y > N - 1:
                         shift_n = math.floor(y / N)
-                        y -= int(shift_n) * N
+                        y -= shift_n * N
                         temp_shifts[1] = shift_n * sv_borders[1, -1]
+                    else:
+                        temp_shifts[1] = 0
                     for z in range(lls[2], uls[2]):
                         if z < 0 or z > N - 1:
                             shift_n = math.floor(z / N)
-                            z -= int(shift_n) * N
+                            z -= shift_n * N
                             temp_shifts[2] = shift_n * sv_borders[2, -1]
-                        sv_idx = x * N**2 + y * N + z
+                        else:
+                            temp_shifts[2] = 0
+                        sv_idx = int(x * N**2 + y * N + z)
+                        for i in range(3):  # Shift walker
+                            temp_r0[i] = r0[i] - temp_shifts[i]
                         # Loop over relevant triangles
                         for i in range(sv_mapping[sv_idx, 0],
                                        sv_mapping[sv_idx, 1]):
@@ -469,12 +476,8 @@ def _cuda_step_mesh(positions, g_x, g_y, g_z, phases, rng_states, t, gamma,
                             A = triangles[tri_idx:tri_idx + 3]
                             B = triangles[tri_idx + 3:tri_idx + 6]
                             C = triangles[tri_idx + 6:tri_idx + 9]
-                            for j in range(3):
-                                A[j] += temp_shifts[j]
-                                B[j] += temp_shifts[j]
-                                C[j] += temp_shifts[j]
                             d = _cuda_ray_triangle_intersection_check(
-                                A, B, C, r0, step)
+                                A, B, C, temp_r0, step)
                             if d > 0 and d < min_d:
                                 min_d = d
                                 min_idx = tri_idx
@@ -484,10 +487,6 @@ def _cuda_step_mesh(positions, g_x, g_y, g_z, phases, rng_states, t, gamma,
                 A = triangles[min_idx:min_idx + 3]
                 B = triangles[min_idx + 3:min_idx + 6]
                 C = triangles[min_idx + 6:min_idx + 9]
-                for i in range(3):
-                    A[i] += shifts[i]
-                    B[i] += shifts[i]
-                    C[i] += shifts[i]
                 normal = cuda.local.array(3, numba.double)
                 normal[0] = ((B[1] - A[1]) * (C[2] - A[2]) -
                              (B[2] - A[2]) * (C[1] - A[1]))
@@ -496,7 +495,11 @@ def _cuda_step_mesh(positions, g_x, g_y, g_z, phases, rng_states, t, gamma,
                 normal[2] = ((B[0] - A[0]) * (C[1] - A[1]) -
                              (B[1] - A[1]) * (C[0] - A[0]))
                 _cuda_normalize_vector(normal)
+                for i in range(3):  # Shift walker to voxel
+                    r0[i] -= shifts[i]             
                 _cuda_reflection(r0, step, min_d, normal)
+                for i in range(3):  # Shift walker back
+                    r0[i] += shifts[i]             
                 step_l -= min_d
             else:
                 check_intersection = False

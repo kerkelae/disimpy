@@ -605,7 +605,8 @@ def add_noise_to_data(data, sigma, seed=123):
 
 
 def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
-               trajectories=None, final_pos=False, quiet=False, cuda_bs=128):
+               trajectories=None, final_pos=False, phases=False, quiet=False,
+               cuda_bs=128):
     """Execute a dMRI simulation. For a detailed tutorial, please see the
     documentation at https://disimpy.readthedocs.io/en/latest/tutorial.html.
 
@@ -631,6 +632,9 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
     final_pos : bool, optional
         If true, the function returns the signal and the final positions of the
         walkers at the end of the simulation.
+    phases : bool, optional
+        If true, the function returns the phase shifts of each walker instead of
+        total signal.
     quiet : bool, optional
         Whether to print messages about simulation progression.
     cuda_bs : int, optional
@@ -1058,10 +1062,12 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
 
     # Calculate simulated signal
     phases = d_phases.copy_to_host(stream=stream)
-    signals = np.real(np.sum(np.exp(1j * phases), axis=1))
     if not quiet:
         print('Simulation finished.')
-    
+    if phases:
+        signals = phases
+    else:
+        signals = np.real(np.sum(np.exp(1j * phases), axis=1))
     if final_pos:
         positions = d_positions.copy_to_host(stream=stream)
         return signals, positions

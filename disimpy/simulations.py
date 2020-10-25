@@ -1061,12 +1061,12 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
                         + ' intersection check algorithm.')
 
     # Calculate simulated signal
-    phases = d_phases.copy_to_host(stream=stream)
     if not quiet:
         print('Simulation finished.')
-    if phases:
-        signals = phases
+    if phases:  # Just return phases
+        signals = d_phases.copy_to_host(stream=stream)
     else:
+        phases = d_phases.copy_to_host(stream=stream)
         signals = np.real(np.sum(np.exp(1j * phases), axis=1))
     if final_pos:
         positions = d_positions.copy_to_host(stream=stream)

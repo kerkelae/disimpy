@@ -605,7 +605,7 @@ def add_noise_to_data(data, sigma, seed=123):
 
 
 def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
-               trajectories=None, quiet=False, cuda_bs=128):
+               trajectories=None, final_pos=False, quiet=False, cuda_bs=128):
     """Execute a dMRI simulation. For a detailed tutorial, please see the
     documentation at https://disimpy.readthedocs.io/en/latest/tutorial.html.
 
@@ -628,6 +628,9 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
     trajectories : str, optional
         Path of a file in which to save the simulated trajectories. Resulting
         file can be very large!
+    final_pos : bool, optional
+        If true, the function returns the signal and the final positions of the
+        walkers at the end of the simulation.
     quiet : bool, optional
         Whether to print messages about simulation progression.
     cuda_bs : int, optional
@@ -989,7 +992,8 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
 
         # Calculate initial positions
         if 'initial positions' in substrate:
-            print('Initialized random walker positions.')
+            if not quiet:
+                print('Initialized random walker positions.')
             positions = substrate['initial positions']
             if (not isinstance(positions, np.ndarray) or
                 positions.shape != (n_spins, 3) or
@@ -1057,4 +1061,9 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
     signals = np.real(np.sum(np.exp(1j * phases), axis=1))
     if not quiet:
         print('Simulation finished.')
-    return signals
+    
+    if final_pos:
+        positions = d_positions.copy_to_host(stream=stream)
+        return signals, positions
+    else:
+        return signals

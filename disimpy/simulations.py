@@ -10,6 +10,7 @@ from numba import cuda
 from numba.cuda.random import (create_xoroshiro128p_states,
                                xoroshiro128p_normal_float64,
                                xoroshiro128p_uniform_float64)
+from warnings import warn
 
 from . import utils, meshes
 from .settings import EPSILON, MAX_ITER, GAMMA
@@ -1057,18 +1058,20 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
     # Check if intersection algorithm iteration limit was exceeded
     iter_exc = d_iter_exc.copy_to_host(stream=stream)
     if np.any(iter_exc):
-        raise Exception('Maximum number of iterations was exceeded in the'
-                        + ' intersection check algorithm.')
+        warn('Maximum number of iterations was exceeded in the intersection ' +
+             'check algorithm for walkers %s.' % np.where(iter_exc)[0])
 
     # Calculate simulated signal
     if not quiet:
         print('Simulation finished.')
     if phases:  # Just return phases
         signals = d_phases.copy_to_host(stream=stream)
+        signals[:, np.where(iter_exc)[0]] = np.nan
     else:
         phases = d_phases.copy_to_host(stream=stream)
         signals = np.real(np.sum(np.exp(1j * phases), axis=1))
-    if final_pos:
+        signals[np.where(iter_exc)[0]] = np.nan
+    if final_pos:  # Return final positions
         positions = d_positions.copy_to_host(stream=stream)
         return signals, positions
     else:

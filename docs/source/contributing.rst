@@ -9,13 +9,13 @@ you get started! Creating issues is also a great way to inform us about any bugs
 or problems you may encounter.
 
 If you already have a well-defined idea or want to make small changes (fix
-typos, improve code style etc.), please fork the repository, make the necessary
-changes, and create a pull request.
+typos, improve code style etc.), please fork the repository, create a branch
+with a descriptive name, make the necessary changes, and create a pull request.
 
 All code should aim to comply with `PEP8 <https://www.python.org/dev/peps/pep-0008/>`_
 and be documented following the `Numpy docstring conventions
-<https://numpydoc.readthedocs.io/en/latest/format.html>`_ (except obvious
-internal functions). Your code should also have accompanying unit tests in the
+<https://numpydoc.readthedocs.io/en/latest/format.html>`_ (except trivial
+internal functions). The functions should also have unit tests in the
 corresponding test module. It is important to make sure that your changes have
 not broken anything by running all tests with:
 
@@ -32,5 +32,5 @@ confirm that it works as expected by executing the following in the
     make html
 
 This will generate a local copy of the documentation in the directory
-``disimpy/docs/_build/html``. Once your pull request is merged with the master
+``disimpy/docs/_build/html``. Once the changes are merged with the master
 branch, the online documentation is automatically updated.

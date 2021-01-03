@@ -20,15 +20,14 @@ the CUDA Toolkit version you install supports your Nvidia driver or upgrade your
 driver. If you are using the CUDA Toolkit not installed by conda and encounter
 issues, check that the `installation path is configured so that Numba can access
 it <https://numba.pydata.org/numba-doc/dev/cuda/overview.html#setting-cuda-installation-path>`_.
-We personally prefer not to use conda for installing the CUDA Toolkit.
 
 In addition, you need the following Python packages:
 
+- matplotlib
 - numba
 - numpy
-- scipy
-- matplotlib
 - pytest
+- scipy
 
 These are automatically installed by pip if you follow the installation
 instructions below.
@@ -36,9 +35,9 @@ instructions below.
 Installation
 ############
 
-To avoid possible issues with automatic installation of some of the
-dependencies, we recommend installing Disimpy in a virtual environment or a
-conda environment. Disimpy can be installed with pip by executing: ::
+To avoid possible issues with the dependencies, we recommend installing Disimpy
+in a virtual environment or a conda environment. Disimpy can be installed with
+pip by executing: ::
 
     pip install git+https://github.com/kerkelae/disimpy.git
 
@@ -51,7 +50,7 @@ Automated tests
 ###############
 
 To confirm that the installation and CUDA configuration works, you should run
-the automated tests by executing the following in Python interpreter:
+the automated tests by executing the following in the Python interpreter:
 
 .. code-block:: python
 

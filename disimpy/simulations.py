@@ -1067,7 +1067,7 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
     if all_signals:  # Return signals from individual walkers
         phases = d_phases.copy_to_host(stream=stream)
         phases[:, np.where(iter_exc)[0]] = np.nan
-        signals = np.real(np.exp(1j * phases), axis=1)
+        signals = np.real(np.exp(1j * phases))
     else:
         phases = d_phases.copy_to_host(stream=stream)
         phases[:, np.where(iter_exc)[0]] = np.nan

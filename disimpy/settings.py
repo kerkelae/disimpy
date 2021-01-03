@@ -7,3 +7,6 @@ MAX_ITER = 1e4
 # walker's position is separated from the surface after a collision to avoid
 # placing the walker in the surface.
 EPSILON = 1e-7
+
+# The gyromagnetic ratio of the simulated spin
+GAMMA = 267.513e6

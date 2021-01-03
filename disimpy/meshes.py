@@ -6,12 +6,15 @@ triangle points and the third dimension indices correspond to the Cartesian
 coordinates of triangle points.
 """
 
+import os
 import math
 import numba
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+
+from . import utils
 
 
 def load_mesh(mesh_file):
@@ -20,7 +23,9 @@ def load_mesh(mesh_file):
     Parameters
     ----------
     mesh_file : str
-        Path of a triangular mesh file in .ply format [1]_.
+        Path of a triangular mesh file in .ply format [1]_. The vertex positions
+        must be the first vertex properties defined. Please see
+        disimpy/tests/example_mesh.ply as an example of the correct format.
 
     Returns
     -------
@@ -35,6 +40,16 @@ def load_mesh(mesh_file):
     """
     with open(mesh_file, 'r') as f:
         mesh_data = f.readlines()
+    header = mesh_data[0:mesh_data.index('end_header\n')]
+    i = [i for i, e in enumerate(header) if 'element vertex' in e][0]
+    if header[i + 1:i + 4] != ['property float x\n', 'property float y\n',
+                               'property float z\n']:
+        raise Exception(
+            'Unsupported mesh file (%s). ' % mesh_file +
+            'Vertex positions must be the first vertex positions defined. ' +
+            'Please see %s as an example of the supported format.' % (
+                os.path.join(os.path.dirname(utils.__file__), 'tests',
+                             'example_mesh.ply')))
     n_of_vertices = int([i for i in mesh_data if
                          i.startswith('element vertex ')][0].split()[-1])
     first_vertice_idx = mesh_data.index('end_header\n') + 1
@@ -43,7 +58,7 @@ def load_mesh(mesh_file):
     faces = np.loadtxt(mesh_data[first_vertice_idx + n_of_vertices::])[:, 1:4]
     mesh = np.zeros((faces.shape[0], 3, 3))
     for i in range(faces.shape[0]):
-        mesh[i, :, :] = vertices[np.array(faces[i], dtype=int)]
+        mesh[i, :, :] = vertices[np.array(faces[i], dtype=int)][0:3, 0:3]
     mesh = np.add(mesh, - np.min(np.min(mesh, 0), 0))
     return mesh
 

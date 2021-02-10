@@ -975,6 +975,7 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
             N_sv = 20
         if 'periodic' in substrate:
             periodic = substrate['periodic']
+            print('Periodic boundary conditions is an experimental feature.')
             if not isinstance(periodic, bool):
                 raise ValueError('Incorrect value (%s) for periodic' % periodic
                                  + ' which has to be boolean.')

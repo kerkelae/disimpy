@@ -26,9 +26,10 @@ Validation
 ##########
 
 Disimpy has been validated by comparing its results to analytical solutions
-(`examples <https://disimpy.readthedocs.io/en/latest/validation.html>`_), to the
-results from other simulators (e.g., `Camino <http://camino.cs.ucl.ac.uk/>`_),
-and by automated testing (:code:`disimpy.tests`).
+(`examples <https://disimpy.readthedocs.io/en/latest/validation.html>`_) and to
+the results from other simulators (e.g., `Camino
+<http://camino.cs.ucl.ac.uk/>`_), and by automated testing
+(:code:`disimpy.tests`).
 
 Contribute
 ##########

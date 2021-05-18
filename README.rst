@@ -22,6 +22,14 @@ Please read the `tutorial
 <https://disimpy.readthedocs.io/en/latest/tutorial.html>`_ to learn how to use
 Disimpy.
 
+Validation
+##########
+
+Disimpy has been validated by comparing its results to analytical solutions
+(`examples <https://disimpy.readthedocs.io/en/latest/validation.html>`_), to the
+results from other simulators (e.g., `Camino <http://camino.cs.ucl.ac.uk/>`_),
+and by automated testing (:code:`disimpy.tests`).
+
 Contribute
 ##########
 

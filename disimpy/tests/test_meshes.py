@@ -39,7 +39,7 @@ def test__mesh_space_subdivision():
 def test__interval_sv_overlap_1d():
     xs = np.arange(0, 11)
     inputs = [[0, 0], [10, 10], [2, -2], [7.2, 16]]
-    outputs = [(0, 0), (10, 10), (0, 2), (7, 10)]
+    outputs = [(0, 1), (9, 10), (0, 2), (7, 10)]
     for i, (x1, x2) in enumerate(inputs):
         ll, ul = meshes._interval_sv_overlap_1d(xs, x1, x2)
         npt.assert_equal((ll, ul), outputs[i])

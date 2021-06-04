@@ -177,7 +177,13 @@ def _interval_sv_overlap_1d(xs, x1, x2):
             if not x < xmax:
                 ul = i
                 break
-    return ll, ul
+    if ll != ul:  # The interval of length 0 is in the subvoxel boundary
+        return ll, ul
+    else:
+        if ll != len(xs) - 1:
+            return ll, ul + 1
+        else:
+            return ll - 1, ul
 
 
 def _subvoxel_to_triangle_mapping(mesh, sv_borders):

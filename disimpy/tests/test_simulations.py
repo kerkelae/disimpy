@@ -10,7 +10,7 @@ from scipy.stats import normaltest, kstest
 from numba.cuda.random import (create_xoroshiro128p_states,
                                xoroshiro128p_normal_float64)
 
-from .. import simulations, gradients, utils, meshes
+from .. import simulations, gradients, utils
 from ..settings import EPSILON
 
 
@@ -20,6 +20,13 @@ def load_example_gradient():
     gradient[0, -11:-1, 0] = -1
     dt = 80e-3 / (gradient.shape[1] - 1)
     return gradient, dt
+
+
+def load_example_mesh():
+    mesh_file = os.path.join(
+        os.path.dirname(simulations.__file__), 'tests', 'example_mesh.npy')
+    mesh = np.load(mesh_file)
+    return mesh
 
 
 def test__cuda_dot_product():
@@ -328,6 +335,170 @@ def test__initial_positions_ellipsoid():
     return
 
 
+def test__mesh_space_subdivision():
+    mesh = load_example_mesh()
+    for N in [10, 20, 30]:
+        sv_borders = simulations._mesh_space_subdivision(mesh, N=N)
+        npt.assert_equal(sv_borders.shape, (3, N + 1))
+        for i in range(3):
+            npt.assert_equal(
+                sv_borders[i], np.linspace(
+                    np.min(np.min(mesh, 0), 0)[i],
+                    np.max(np.max(mesh, 0), 0)[i], N + 1))
+    return
+
+
+def test__interval_sv_overlap_1d():
+    xs = np.arange(0, 11)
+    inputs = [[0, 0], [10, 10], [2, -2], [7.2, 16]]
+    outputs = [(0, 1), (9, 10), (0, 2), (7, 10)]
+    for i, (x1, x2) in enumerate(inputs):
+        ll, ul = simulations._interval_sv_overlap_1d(xs, x1, x2)
+        npt.assert_equal((ll, ul), outputs[i])
+    return
+
+
+def test__subvoxel_to_triangle_mapping():
+    mesh = load_example_mesh()
+    sv_borders = simulations._mesh_space_subdivision(mesh, N=20)
+    tri_indices, sv_mapping = simulations._subvoxel_to_triangle_mapping(
+        mesh, sv_borders)
+    desired_tri_indices = np.loadtxt(
+        os.path.join(os.path.dirname(simulations.__file__), 'tests',
+                     'desired_tri_indices.txt'))
+    desired_sv_mapping = np.loadtxt(
+        os.path.join(os.path.dirname(simulations.__file__), 'tests',
+                     'desired_sv_mapping.txt'))
+    npt.assert_equal(tri_indices, desired_tri_indices)
+    npt.assert_equal(sv_mapping, desired_sv_mapping)
+    return
+
+
+def test__c_cross():
+    np.random.seed(123)
+    for _ in range(10):
+        A = np.random.random(3) - .5
+        B = np.random.random(3) - .5
+        C = simulations._c_cross(A, B)
+        npt.assert_almost_equal(C, np.cross(A, B))
+    return
+
+
+def test__c_dot():
+    np.random.seed(123)
+    for _ in range(10):
+        A = np.random.random(3) - .5
+        B = np.random.random(3) - .5
+        C = simulations._c_dot(A, B)
+        npt.assert_almost_equal(C, np.dot(A, B))
+    return
+
+
+def test__triangle_intersection_check():
+    A = np.array([2.0, 0, 0])
+    B = np.array([0, 2.0, 0])
+    C = np.array([0.0, 0, 0])
+    r0s = np.array([[0.1, 0.1, 1.0],
+                    [0.1, 0.1, 1.0],
+                    [0.1, 0.1, 1.0],
+                    [0.1, 0.1, 1.0],
+                    [10, 10, 0]])
+    steps = np.array([[0, 0, -1.0],
+                      [0, 0, 1],
+                      [0, 0, -.1],
+                      [1.0, 1.0, 0],
+                      [0, 0, 1.0]])
+    desired = np.array([1, -1, 1, np.nan, np.nan])
+    for i, (r0, step) in enumerate(zip(r0s, steps)):
+        d = simulations._triangle_intersection_check(A, B, C, r0, step)
+        npt.assert_almost_equal(d, desired[i])
+    return
+
+
+def test__fill_mesh():
+    n_s = int(1e3)
+    mesh_file = os.path.join(
+        os.path.dirname(simulations.__file__), 'tests', 'sphere_mesh.npy')
+    mesh = np.load(mesh_file)
+    sv_borders = simulations._mesh_space_subdivision(mesh, N=20)
+    tri_indices, sv_mapping = simulations._subvoxel_to_triangle_mapping(
+        mesh, sv_borders)
+    points = simulations._fill_mesh(
+        n_s, mesh, sv_borders, tri_indices, sv_mapping, intra=True, extra=False)
+    r = np.max(mesh) / 2
+    points -= r
+    npt.assert_equal(np.max(np.linalg.norm(points, axis=1)) < r, True)
+    points = simulations._fill_mesh(
+        n_s, mesh, sv_borders, tri_indices, sv_mapping, intra=False, extra=True)
+    r = np.max(mesh) / 2
+    points -= r
+    npt.assert_equal(np.min(np.linalg.norm(points, axis=1)) > .9 * r, True)
+    mesh_file = os.path.join(
+        os.path.dirname(simulations.__file__), 'tests',
+        'cyl_mesh_r5um_l25um_closed.npy')
+    mesh = np.load(mesh_file)
+    r = np.max(np.max(mesh, axis=0), axis=0)[0] / 2
+    l = np.max(np.max(mesh, axis=0), axis=0)[2]
+    sv_borders = simulations._mesh_space_subdivision(mesh, N=20)
+    tri_indices, sv_mapping = simulations._subvoxel_to_triangle_mapping(
+        mesh, sv_borders)
+    points = simulations._fill_mesh(
+        n_s, mesh, sv_borders, tri_indices, sv_mapping, intra=True, extra=False)
+    npt.assert_equal(np.min(points[:, 2]) > 0, True)
+    npt.assert_equal(np.max(points[:, 2]) < l, True)
+    npt.assert_equal(
+        np.max(np.linalg.norm(points[:, 0:2] - r, axis=1)) < r, True)
+    points = simulations._fill_mesh(
+        n_s, mesh, sv_borders, tri_indices, sv_mapping, intra=False, extra=True)
+    npt.assert_equal(
+        np.min(np.linalg.norm(points[:, 0:2] - r, axis=1)) / .9 > r, True)
+    return
+
+
+def test__AABB_to_mesh():
+    A = np.array([0, 0, 0])
+    B = np.array([np.pi, np.pi / 2, np.pi * 2])
+    mesh = simulations._AABB_to_mesh(A, B)
+    desired = np.array([[[0., 0., 0., ],
+                         [3.14159265, 0., 0.],
+                         [3.14159265, 1.57079633, 0.]],
+                        [[0., 0., 0.],
+                         [0., 1.57079633, 0.],
+                         [3.14159265, 1.57079633, 0.]],
+                        [[0., 0., 6.28318531],
+                         [3.14159265, 0., 6.28318531],
+                         [3.14159265, 1.57079633, 6.28318531]],
+                        [[0., 0., 6.28318531],
+                         [0., 1.57079633, 6.28318531],
+                         [3.14159265, 1.57079633, 6.28318531]],
+                        [[0., 0., 0.],
+                         [3.14159265, 0., 0.],
+                         [3.14159265, 0., 6.28318531]],
+                        [[0., 0., 0.],
+                         [0., 0., 6.28318531],
+                         [3.14159265, 0., 6.28318531]],
+                        [[0., 1.57079633, 0.],
+                         [3.14159265, 1.57079633, 0.],
+                         [3.14159265, 1.57079633, 6.28318531]],
+                        [[0., 1.57079633, 0.],
+                         [0., 1.57079633, 6.28318531],
+                         [3.14159265, 1.57079633, 6.28318531]],
+                        [[0., 0., 0.],
+                         [0., 1.57079633, 0.],
+                         [0., 1.57079633, 6.28318531]],
+                        [[0., 0., 0.],
+                         [0., 0., 6.28318531],
+                         [0., 1.57079633, 6.28318531]],
+                        [[3.14159265, 0., 0.],
+                         [3.14159265, 1.57079633, 0.],
+                         [3.14159265, 1.57079633, 6.28318531]],
+                        [[3.14159265, 0., 0.],
+                         [3.14159265, 0., 6.28318531],
+                         [3.14159265, 1.57079633, 6.28318531]]])
+    npt.assert_almost_equal(mesh, desired)
+    return
+
+
 def test_free_diffusion():
 
     # Signal
@@ -523,17 +694,16 @@ def test_mesh_diffusion():
     gradient, dt = load_example_gradient()
     gradient, dt = gradients.interpolate_gradient(gradient, dt, n_t)
     mesh_file = os.path.join(
-        os.path.dirname(meshes.__file__), 'tests',
+        os.path.dirname(simulations.__file__), 'tests',
         'cyl_mesh_r5um_l25um_closed.npy')
     mesh = np.load(mesh_file)
     mesh -= np.min(np.min(mesh, 0), 0)
     traj_file = os.path.join(
         os.path.dirname(simulations.__file__), 'tests', 'example_traj.txt')
     radius = 5e-6
-    init_pos = np.ones((n_s, 3)) * np.max(np.max(mesh, 0), 0) / 2
     substrate = {'type': 'mesh',
                  'mesh': mesh,
-                 'initial positions': init_pos}
+                 'intra' : True}
     signals = simulations.simulation(
         n_s, diffusivity, gradient, dt, substrate, trajectories=traj_file)
     trajectories = np.loadtxt(traj_file).reshape((n_t + 1, n_s, 3))
@@ -545,7 +715,7 @@ def test_mesh_diffusion():
 
     # Test periodic boundary conditions
     mesh_file = os.path.join(
-        os.path.dirname(meshes.__file__), 'tests', 'cyl_mesh_r5um_l25um.npy')
+        os.path.dirname(simulations.__file__), 'tests', 'cyl_mesh_r5um_l25um.npy')
     mesh = np.load(mesh_file)
     mesh = np.add(mesh, - np.min(np.min(mesh, 0), 0))
     traj_file = os.path.join(
@@ -566,9 +736,13 @@ def test_mesh_diffusion():
     npt.assert_equal(np.min(trajectories[..., 2]) < -12.5e-6, True)
 
     # Test signal against analytical cylinder
-    n_s = int(1e5)
+    n_s = int(1e4)
     n_t = int(1e3)
     diffusivity = 2e-9
+    mesh_file = os.path.join(
+        os.path.dirname(simulations.__file__), 'tests',
+        'cyl_mesh_r5um_l25um_closed.npy')
+    mesh = np.load(mesh_file)
     gradient, dt = load_example_gradient()
     bs = np.linspace(1, 3e9, 100)
     gradient = np.concatenate([gradient for _ in bs], axis=0)
@@ -587,7 +761,14 @@ def test_mesh_diffusion():
                  'orientation': np.array([0, 0, 1.])}
     signals_2 = simulations.simulation(
         n_s, diffusivity, gradient, dt, substrate)
-    npt.assert_almost_equal(signals_1 / n_s, signals_2 / n_s, 3)
+    npt.assert_almost_equal(signals_1 / n_s, signals_2 / n_s, 2)
+    substrate = {'type': 'mesh',
+                 'mesh': mesh,
+                 'intra' : True}
+    signals_3 = simulations.simulation(
+        n_s, diffusivity, gradient, dt, substrate)
+    npt.assert_almost_equal(signals_3 / n_s, signals_2 / n_s, 2)
+    npt.assert_almost_equal(signals_3 / n_s, signals_1 / n_s, 2)
     return
 
 

@@ -12,7 +12,7 @@ from numba.cuda.random import (create_xoroshiro128p_states,
                                xoroshiro128p_uniform_float64)
 from warnings import warn
 
-from . import utils, meshes
+from . import utils
 from .settings import EPSILON, MAX_ITER, GAMMA
 
 
@@ -167,27 +167,9 @@ def _fill_ellipsoid(n, a, b, c, seed=123):
     return points
 
 
-def _initial_positions_cylinder(n_spins, radius, R, seed=123):
-    """Calculate initial positions for spins in a cylinder whose orientation is
-    defined by R which defines the rotation from cylinder frame to lab frame."""
-    positions = np.zeros((n_spins, 3))
-    positions[:, 1:3] = _fill_circle(n_spins, radius, seed)
-    positions = np.matmul(R, positions.T).T
-    return positions
-
-
-def _initial_positions_ellipsoid(n_spins, a, b, c, R, seed=123):
-    """Calculate initial positions for spins in an ellipsoid with semi-axes a,
-    b, c whos whose orientation is defined by R which defines the rotation from
-    ellipsoid frame to lab frame."""
-    positions = _fill_ellipsoid(n_spins, a, b, c, seed)
-    positions = np.matmul(R, positions.T).T
-    return positions
-
-
 @cuda.jit(device=True)
 def _cuda_ray_triangle_intersection_check(A, B, C, r0, step):
-    """Check if a ray defined by r0 and step intersets with a triangle defined
+    """Check if a ray defined by r0 and step intersects with a triangle defined
     by A, B, and C. The output is the distance in units of step length from r0
     to intersection if intersection found, nan otherwise. This function is based
     on the Moller-Trumbore algorithm."""
@@ -213,6 +195,371 @@ def _cuda_ray_triangle_intersection_check(A, B, C, r0, step):
             return np.nan
     else:
         return np.nan
+
+
+def _initial_positions_cylinder(n_spins, radius, R, seed=123):
+    """Calculate initial positions for spins in a cylinder whose orientation is
+    defined by R which defines the rotation from cylinder frame to lab frame."""
+    positions = np.zeros((n_spins, 3))
+    positions[:, 1:3] = _fill_circle(n_spins, radius, seed)
+    positions = np.matmul(R, positions.T).T
+    return positions
+
+
+def _initial_positions_ellipsoid(n_spins, a, b, c, R, seed=123):
+    """Calculate initial positions for spins in an ellipsoid with semi-axes a,
+    b, c whos whose orientation is defined by R which defines the rotation from
+    ellipsoid frame to lab frame."""
+    positions = _fill_ellipsoid(n_spins, a, b, c, seed)
+    positions = np.matmul(R, positions.T).T
+    return positions
+
+
+def _mesh_space_subdivision(mesh, N=20):
+    """Divide the mesh volume into N**3 subvoxels.
+
+    Parameters
+    ----------
+    mesh : numpy.ndarray
+        Triangular mesh represented by an array of shape (number of triangles,
+        3, 3) where the second dimension indices correspond to different
+        triangle points and the third dimension representes the Cartesian
+        coordinates.
+    N : int
+        Number of subvoxels along each Cartesian coordinate axis.
+
+    Returns
+    -------
+    sv_borders : numpy.ndarray
+        Array of shape (3, N + 1) representing the boundaries between the
+        subvoxels along Cartesian coordinate axes.
+    """
+    voxel_min = np.min(np.min(mesh, 0), 0)
+    voxel_max = np.max(np.max(mesh, 0), 0)
+    xs = np.linspace(voxel_min[0], voxel_max[0], N + 1)
+    ys = np.linspace(voxel_min[1], voxel_max[1], N + 1)
+    zs = np.linspace(voxel_min[2], voxel_max[2], N + 1)
+    sv_borders = np.vstack((xs, ys, zs))
+    return sv_borders
+
+
+@numba.jit()
+def _interval_sv_overlap_1d(xs, x1, x2):
+    """Return the indices of subvoxels that overlap with interval [x1, x2].
+
+    Parameters
+    ----------
+    xs : numpy.ndarray
+        Array of subvoxel boundaries.
+    x1 : float
+        Start/end point of the interval.
+    x2 : float
+        End/start point of the interval.
+
+    Returns
+    -------
+    ll : float
+        Lowest subvoxel index of the overlapping subvoxels.
+    ul : float
+        Highest subvoxel index of the overlapping subvoxels.
+    """
+    xmin = min(x1, x2)
+    xmax = max(x1, x2)
+    if xmin <= xs[0]:
+        ll = 0
+    elif xmin >= xs[-1]:
+        ll = len(xs) - 1
+    else:
+        ll = 0
+        for i, x in enumerate(xs):
+            if x > xmin:
+                ll = i - 1
+                break
+    if xmax >= xs[-1]:
+        ul = len(xs) - 1
+    elif xmax <= xs[0]:
+        ul = 0
+    else:
+        ul = len(xs) - 1
+        for i, x in enumerate(xs):
+            if not x < xmax:
+                ul = i
+                break
+    if ll != ul:
+        return ll, ul
+    else:
+        if ll != len(xs) - 1:
+            return ll, ul + 1
+        else:
+            return ll - 1, ul
+
+
+def _subvoxel_to_triangle_mapping(mesh, sv_borders):
+    """Generate a mapping between subvoxels and relevant triangles.
+
+    Parameters
+    ----------
+    mesh : numpy.ndarray
+        Triangular mesh represented by an array of shape (number of triangles,
+        3, 3) where the second dimension indices correspond to different
+        triangle points and the third dimension representes the Cartesian
+        coordinates.
+    sv_borders : numpy.ndarray
+        Array of shape (3, N + 1) representing the boundaries between the
+        subvoxels along cartesian coordinate axes.
+
+    Returns
+    -------
+    tri_indices : numpy.ndarray
+        1D array containing the relevant triangle indices for all subvoxels.
+    sv_mapping : numpy.ndarray
+        2D array that allows the relevant triangle indices of a given subvoxel
+        to be located in the array tri_indices. The relevant triangle indices
+        for subvoxel i are tri_indices[sv_mapping[i, 0]:sv_mapping[i, 1]].
+
+    Notes
+    -----
+    This implementation finds the relevant triangles by comparing the axis
+    aligned bounding boxes of the triangle to the subvoxel grid. The output is
+    two arrays so that it can be passed onto CUDA kernels which do not support
+    3D arrays or Python data structures like lists of lists or dictionaries.
+    """
+    N = sv_borders.shape[1] - 1
+    xs = sv_borders[0]
+    ys = sv_borders[1]
+    zs = sv_borders[2]
+    relevant_triangles = [[] for _ in range(N**3)]
+    for i, triangle in enumerate(mesh):
+        xmin = np.min(triangle[:, 0])
+        xmax = np.max(triangle[:, 0])
+        ymin = np.min(triangle[:, 1])
+        ymax = np.max(triangle[:, 1])
+        zmin = np.min(triangle[:, 2])
+        zmax = np.max(triangle[:, 2])
+        x_ll, x_ul = _interval_sv_overlap_1d(xs, xmin, xmax)
+        y_ll, y_ul = _interval_sv_overlap_1d(ys, ymin, ymax)
+        z_ll, z_ul = _interval_sv_overlap_1d(zs, zmin, zmax)
+        for x in range(x_ll, x_ul):
+            for y in range(y_ll, y_ul):
+                for z in range(z_ll, z_ul):
+                    idx = x * N**2 + y * N + z  # 1D idx of this subvoxel
+                    relevant_triangles[idx].append(i)
+    tri_indices = []
+    sv_mapping = np.zeros((len(relevant_triangles), 2))
+    counter = 0
+    for i, l in enumerate(relevant_triangles):
+        tri_indices += l
+        sv_mapping[i, 0] = counter
+        sv_mapping[i, 1] = counter + len(l)
+        counter += len(l)
+    return np.array(tri_indices), sv_mapping.astype(int)
+
+
+@numba.jit()
+def _c_cross(A, B):
+    """Compiled function for cross product between two 1D arrays of length 3."""
+    C = np.zeros(3)
+    C[0] = A[1] * B[2] - A[2] * B[1]
+    C[1] = A[2] * B[0] - A[0] * B[2]
+    C[2] = A[0] * B[1] - A[1] * B[0]
+    return C
+
+
+@numba.jit()
+def _c_dot(A, B):
+    """Compiled function for dot product between two 1D arrays of length 3."""
+    return A[0] * B[0] + A[1] * B[1] + A[2] * B[2]
+
+
+@numba.jit()
+def _triangle_intersection_check(A, B, C, r0, step):
+    """Return the distance from r0 to triangle ABC along ray defined by step.
+
+    Parameters
+    ----------
+    A : numpy.ndarray
+        1D array of length 3 defining a point of the triangle.
+    B : numpy.ndarray
+        1D array of length 3 defining a point of the triangle.
+    C : numpy.ndarray
+        1D array of length 3 defining a point of the triangle.
+    r0 : numpy.ndarray
+        1D array of length 3 defining the point from which the distance to the
+        triangle is calculated.
+    step : numpy.ndarray
+        1D array of length 3 defining the direction of the ray.
+
+    Return
+    ------
+    d : float
+        Distance from r0 to triangle ABC along the direction defined by step.
+        Returns nan in case no intersection.
+
+    Notes
+    -----
+    This function is based on the Moller-Trumbore algorithm.
+    """
+    step = step / math.sqrt(_c_dot(step, step))
+    T = r0 - A
+    E_1 = B - A
+    E_2 = C - A
+    P = _c_cross(step, E_2)
+    Q = _c_cross(T, E_1)
+    det = _c_dot(P, E_1)
+    if det != 0:
+        t = 1 / det * _c_dot(Q, E_2)
+        u = 1 / det * _c_dot(P, T)
+        v = 1 / det * _c_dot(Q, step)
+        if u >= 0 and u <= 1 and v >= 0 and v <= 1 and u + v <= 1:
+            return t
+        else:
+            return np.nan
+    else:
+        return np.nan
+
+
+def _fill_mesh(n_s, mesh, sv_borders, tri_indices, sv_mapping, intra, extra,
+               seed=12345):
+    """Uniformly position points inside the mesh.
+
+    Parameters
+    ----------
+    n_s : int
+        Number of points.
+    mesh : numpy.ndarray
+        Triangular mesh represented by an array of shape (number of triangles,
+        3, 3) where the second dimension indices correspond to different
+        triangle points and the third dimension representes the Cartesian
+        coordinates.
+    sv_borders : numpy.ndarray
+        Array of shape (3, N + 1) representing the boundaries between the
+        subvoxels along cartesian coordinate axes.
+    tri_indices : numpy.ndarray
+        1D array containing the relevant triangle indices for all subvoxels.
+    sv_mapping : numpy.ndarray
+        2D array that allows the relevant triangle indices of a given subvoxel
+        to be located in the array tri_indices. The relevant triangle indices
+        for subvoxel i are tri_indices[sv_mapping[i, 0]:sv_mapping[i, 1]].
+    intra : bool
+        Whether to place spins inside the mesh.
+    extra : bool
+        Whether to place spins outside the mesh.
+    seed : int
+        Seed for random number generation.
+
+    Returns
+    -------
+    positions : numpy.ndarray
+        Array of shape (n_s, 3) containing the calculated positions.
+    """
+    if (not intra) and (not extra):
+        raise ValueError(
+            'At least one of the parameters intra and extra have to be True')
+    np.random.seed(seed)
+    positions = np.zeros((n_s, 3))
+    N = sv_borders.shape[1] - 1
+    voxel_size = np.max(np.max(mesh, 0), 0)
+    if intra and extra:
+        for i in range(n_s):
+            positions[i, :] = np.random.random(3) * voxel_size
+    else:
+        for i in range(n_s):
+            valid = False
+            while not valid:
+                intersections = 0
+                r0 = np.random.random(3) * voxel_size
+                #step = np.array([1., 0, 0]) * voxel_size
+                step = np.random.random()
+                step /= np.linalg.norm(step)
+                step *= voxel_size
+                x_ll, x_ul = _interval_sv_overlap_1d(
+                    sv_borders[0, :], r0[0], (r0 + step)[0])
+                y_ll, y_ul = _interval_sv_overlap_1d(
+                    sv_borders[1, :], r0[1], (r0 + step)[1])
+                z_ll, z_ul = _interval_sv_overlap_1d(
+                    sv_borders[2, :], r0[2], (r0 + step)[2])
+                sv_indices = []
+                for x in range(x_ll, x_ul):
+                    for y in range(y_ll, y_ul):
+                        for z in range(z_ll, z_ul):
+                            sv_indices.append(x * N**2 + y * N + z)
+                counted = np.zeros(mesh.shape[0]).astype(bool)
+                for sv_idx in sv_indices:
+                    ll = sv_mapping[sv_idx, 0]
+                    ul = sv_mapping[sv_idx, 1]
+                    for j in range(ll, ul):
+                        tri_idx = tri_indices[j]
+                        if not counted[tri_idx]:
+                            counted[tri_idx] = True
+                            triangle = mesh[tri_idx]
+                            A = triangle[0, :]
+                            B = triangle[1, :]
+                            C = triangle[2, :]
+                            d = _triangle_intersection_check(A, B, C, r0, step)
+                            if d > 0:
+                                intersections += 1
+                if intra:
+                    if intersections % 2 != 0:
+                        valid = True
+                else:
+                    if intersections % 2 == 0:
+                        valid = True
+            positions[i, :] = r0
+    return positions
+
+
+def _AABB_to_mesh(A, B):
+    """Return a mesh that corresponds to an axis aligned bounding box defined by
+    A and B."""
+    tri_1 = np.vstack((np.array([A[0], A[1], A[2]]),
+                       np.array([B[0], A[1], A[2]]),
+                       np.array([B[0], B[1], A[2]])))
+    tri_2 = np.vstack((np.array([A[0], A[1], A[2]]),
+                       np.array([A[0], B[1], A[2]]),
+                       np.array([B[0], B[1], A[2]])))
+    tri_3 = np.vstack((np.array([A[0], A[1], B[2]]),
+                       np.array([B[0], A[1], B[2]]),
+                       np.array([B[0], B[1], B[2]])))
+    tri_4 = np.vstack((np.array([A[0], A[1], B[2]]),
+                       np.array([A[0], B[1], B[2]]),
+                       np.array([B[0], B[1], B[2]])))
+    tri_5 = np.vstack((np.array([A[0], A[1], A[2]]),
+                       np.array([B[0], A[1], A[2]]),
+                       np.array([B[0], A[1], B[2]])))
+    tri_6 = np.vstack((np.array([A[0], A[1], A[2]]),
+                       np.array([A[0], A[1], B[2]]),
+                       np.array([B[0], A[1], B[2]])))
+    tri_7 = np.vstack((np.array([A[0], B[1], A[2]]),
+                       np.array([B[0], B[1], A[2]]),
+                       np.array([B[0], B[1], B[2]])))
+    tri_8 = np.vstack((np.array([A[0], B[1], A[2]]),
+                       np.array([A[0], B[1], B[2]]),
+                       np.array([B[0], B[1], B[2]])))
+    tri_9 = np.vstack((np.array([A[0], A[1], A[2]]),
+                       np.array([A[0], B[1], A[2]]),
+                       np.array([A[0], B[1], B[2]])))
+    tri_10 = np.vstack((np.array([A[0], A[1], A[2]]),
+                        np.array([A[0], A[1], B[2]]),
+                        np.array([A[0], B[1], B[2]])))
+    tri_11 = np.vstack((np.array([B[0], A[1], A[2]]),
+                        np.array([B[0], B[1], A[2]]),
+                        np.array([B[0], B[1], B[2]])))
+    tri_12 = np.vstack((np.array([B[0], A[1], A[2]]),
+                        np.array([B[0], A[1], B[2]]),
+                        np.array([B[0], B[1], B[2]])))
+    mesh = np.concatenate((tri_1[np.newaxis, :, :],
+                           tri_2[np.newaxis, :, :],
+                           tri_3[np.newaxis, :, :],
+                           tri_4[np.newaxis, :, :],
+                           tri_5[np.newaxis, :, :],
+                           tri_6[np.newaxis, :, :],
+                           tri_7[np.newaxis, :, :],
+                           tri_8[np.newaxis, :, :],
+                           tri_9[np.newaxis, :, :],
+                           tri_10[np.newaxis, :, :],
+                           tri_11[np.newaxis, :, :],
+                           tri_12[np.newaxis, :, :]), axis=0)
+    return mesh
 
 
 @cuda.jit(device=True)
@@ -497,10 +844,10 @@ def _cuda_step_mesh(positions, g_x, g_y, g_z, phases, rng_states, t, gamma,
                              (B[1] - A[1]) * (C[0] - A[0]))
                 _cuda_normalize_vector(normal)
                 for i in range(3):  # Shift walker to voxel
-                    r0[i] -= shifts[i]             
+                    r0[i] -= shifts[i]
                 _cuda_reflection(r0, step, min_d, normal)
                 for i in range(3):  # Shift walker back
-                    r0[i] += shifts[i]             
+                    r0[i] += shifts[i]
                 step_l -= min_d
             else:
                 check_intersection = False
@@ -702,13 +1049,13 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
                          + ' which has to be a positive integer.')
 
     if not quiet:
-        print('Starting simulation.')
+        print('Starting simulation')
         if trajectories:
             print('The trajectories file will be up to %s GB'
                   % (gradient.shape[1] * n_spins * 3 * 25 / 1e9))
 
     # Set up cuda stream
-    bs = cuda_bs  # Threads per block)
+    bs = cuda_bs  # Threads per block
     gs = int(math.ceil(float(n_spins) / bs))  # Blocks per grid
     stream = cuda.stream()
 
@@ -731,9 +1078,10 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
     step_l = np.sqrt(6 * diffusivity * dt)
 
     if not quiet:
-        print('Step length = %s' % step_l)
         print('Number of spins = %s' % n_spins)
         print('Number of steps = %s' % gradient.shape[1])
+        print('Step length = %s m' % step_l)
+        print('Step duration = %s s' % dt)
 
     if substrate['type'] == 'free':
 
@@ -982,15 +1330,18 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
         else:
             periodic = False
 
+        # Align the corner of the mesh with the origin of the coordinate system
+        mesh -= np.min(np.min(mesh, 0), 0)
+
         # Calculate subvoxel division
         if not quiet:
             print("Calculating subvoxel division.", end="\r")
-        sv_borders = meshes._mesh_space_subdivision(mesh, N=N_sv)
+        sv_borders = _mesh_space_subdivision(mesh, N=N_sv)
         if step_l > min(np.max(np.max(mesh, 0), 0)):
             raise ValueError('Step length is too long for good results. ' +
                              'Please increase number of time steps or lower' +
                              'diffusivity.')
-        tri_indices, sv_mapping = meshes._subvoxel_to_triangle_mapping(
+        tri_indices, sv_mapping = _subvoxel_to_triangle_mapping(
             mesh, sv_borders)
         d_sv_borders = cuda.to_device(sv_borders, stream=stream)
         d_tri_indices = cuda.to_device(tri_indices, stream=stream)
@@ -1003,15 +1354,15 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
             positions = substrate['initial positions']
             if (not isinstance(positions, np.ndarray) or
                 positions.shape != (n_spins, 3) or
-                positions.dtype != np.float):
+                    positions.dtype != np.float):
                 raise ValueError('Incorrect value for initial positions which'
                                  + 'has to be a float array of shape (n of '
                                  + 'spins, 3).')
         else:
             if not quiet:
                 print("Calculating initial positions.", end="\r")
-            positions = meshes._fill_mesh(n_spins, mesh, sv_borders,
-                                          tri_indices, sv_mapping, intra, extra)
+            positions = _fill_mesh(n_spins, mesh, sv_borders,
+                                   tri_indices, sv_mapping, intra, extra)
             if not quiet:
                 print("Finished calculating initial positions.")
         if trajectories:
@@ -1022,8 +1373,8 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
             np.ascontiguousarray(positions), stream=stream)
 
         # Calculate voxel boundaries as triangular mesh
-        voxel_mesh = meshes._AABB_to_mesh(np.min(np.min(mesh, 0), 0),
-                                          np.max(np.max(mesh, 0), 0))
+        voxel_mesh = _AABB_to_mesh(np.min(np.min(mesh, 0), 0),
+                                   np.max(np.max(mesh, 0), 0))
         d_triangles = cuda.to_device(
             np.ascontiguousarray(mesh.ravel()), stream=stream)
         d_voxel_mesh = cuda.to_device(

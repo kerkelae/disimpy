@@ -12,5 +12,5 @@ setup(
     packages=['disimpy', 'disimpy.tests'],
     install_requires=requirements,
     include_package_data=True,
-    package_data={'': ['tests/*', 'tests/camino/*']},
+    package_data={'': ['tests/*']},
 )

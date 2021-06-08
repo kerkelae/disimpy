@@ -9,12 +9,6 @@ disimpy.gradients
 .. automodule:: disimpy.gradients
     :members:
 
-disimpy.meshes
-##############
-
-.. automodule:: disimpy.meshes
-    :members:
-
 disimpy.simulations
 ###################
 

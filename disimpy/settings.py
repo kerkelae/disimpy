@@ -6,7 +6,7 @@ MAX_ITER = 1e4
 # This constant defines the distance by which a random walker's position is
 # separated from the surface after a collision to avoid placing the walker in
 # the surface.
-EPSILON = 1e-8
+EPSILON = 1e-12
 
 # The gyromagnetic ratio of the simulated spin
 GAMMA = 267.513e6

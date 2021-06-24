@@ -111,7 +111,7 @@ def _cuda_reflection(r0, step, d, normal):
                    - intersection[i])
     _cuda_normalize_vector(step)
     for i in range(3):
-        r0[i] = intersection[i] + EPSILON * d * step[i]
+        r0[i] = intersection[i] + EPSILON * step[i] # * d
     return
 
 

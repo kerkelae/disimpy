@@ -74,6 +74,7 @@ def show_traj(traj_file, show=True):
     ax.set_ylabel('y')
     ax.set_zlabel('z')
     ax.ticklabel_format(style='sci', scilimits=(0, 0))
+    fig.tight_layout()
     if show:
         plt.show()
     else:
@@ -118,6 +119,7 @@ def show_mesh(mesh, show=True):
     ax.set_ylabel('y')
     ax.set_zlabel('z')
     ax.ticklabel_format(style='sci', scilimits=(0, 0))
+    fig.tight_layout()
     if show:
         plt.show()
     else:

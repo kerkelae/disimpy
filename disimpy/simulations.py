@@ -102,7 +102,7 @@ def _cuda_reflection(r0, step, d, normal):
         intersection[i] = r0[i] + d * step[i]
         v[i] = intersection[i] - r0[i]
     dp = _cuda_dot_product(v, normal)
-    if dp < 0:  # Make sure r0 isn't 'behind' the normal
+    if dp > 0:  # Make sure the normal vector points against the step
         for i in range(3):
             normal[i] *= -1
         dp = _cuda_dot_product(v, normal)
@@ -111,8 +111,8 @@ def _cuda_reflection(r0, step, d, normal):
                    - intersection[i])
     _cuda_normalize_vector(step)
     for i in range(3):
-        r0[i] = intersection[i] + EPSILON * step[i]
-        #r0[i] = intersection[i] + EPSILON * normal[i]
+        #r0[i] = intersection[i] + EPSILON * step[i]
+        r0[i] = intersection[i] + EPSILON * normal[i]
     return
 
 

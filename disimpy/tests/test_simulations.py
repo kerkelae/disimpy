@@ -236,7 +236,7 @@ def test__cuda_reflection():
     test_kernel[1, 128, stream](r0, step, d, normal)
     stream.synchronize()
     npt.assert_almost_equal(step, np.array([[0, -1, 0]]))
-    npt.assert_almost_equal(r0, np.array([[0, -EPSILON * d, 0.5]]))
+    npt.assert_almost_equal(r0, np.array([[0, -EPSILON, 0.5]]))
     return
 
 

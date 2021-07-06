@@ -5,6 +5,7 @@
    :maxdepth: 2
 
    installation
+   validation
    tutorial
    modules_and_functions
    contributing

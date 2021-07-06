@@ -1424,7 +1424,7 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
     else:
         phases = d_phases.copy_to_host(stream=stream)
         phases[:, np.where(iter_exc)[0]] = np.nan
-        signals = np.real(np.sum(np.exp(1j * phases), axis=1))
+        signals = np.real(np.nansum(np.exp(1j * phases), axis=1))
     if final_pos:  # Return final positions
         positions = d_positions.copy_to_host(stream=stream)
         return signals, positions

@@ -11,7 +11,12 @@ from numba.cuda.random import (create_xoroshiro128p_states,
                                xoroshiro128p_normal_float64)
 
 from .. import simulations, gradients, utils
-from ..settings import EPSILON
+
+
+# This constant defines the distance by which a random walker's position is
+# separated from the surface after a collision to avoid placing the walker in
+# the surface.
+EPSILON = 1e-12
 
 
 def load_example_gradient():

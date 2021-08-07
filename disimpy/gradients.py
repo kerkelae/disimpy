@@ -8,7 +8,8 @@ gradient magnitude in SI units (T/m).
 import numpy as np
 import scipy.integrate
 
-from .simulations import GAMMA
+
+GAMMA = 267.513e6 # Gyromagnetic ratio of the simulated spin
 
 
 def interpolate_gradient(gradient, dt, n_t):

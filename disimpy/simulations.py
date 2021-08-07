@@ -13,7 +13,15 @@ from numba.cuda.random import (create_xoroshiro128p_states,
 from warnings import warn
 
 from . import utils
-from .settings import EPSILON, MAX_ITER, GAMMA
+
+
+# This constant defines the distance by which a random walker's position is
+# separated from the surface after a collision to avoid placing the walker in
+# the surface.
+EPSILON = 1e-12
+
+GAMMA = 267.513e6 # Gyromagnetic ratio of the simulated spin
+
 
 
 @cuda.jit(device=True)
@@ -955,7 +963,7 @@ def add_noise_to_data(data, sigma, seed=123):
 
 def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
                trajectories=None, final_pos=False, all_signals=False,
-               quiet=False, cuda_bs=128):
+               quiet=False, cuda_bs=128, max_iter=int(1e3)):
     """Execute a dMRI simulation. For a detailed tutorial, please see the
     documentation at https://disimpy.readthedocs.io/en/latest/tutorial.html.
 
@@ -988,6 +996,9 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
         Whether to print messages about simulation progression.
     cuda_bs : int, optional
         The size of the CUDA thread block (1D).
+    max_iter : int, optional
+        The maximum number of allowed iterations in the intersection check
+        algorithm.
 
     Returns
     -------
@@ -1048,6 +1059,10 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
     if (not isinstance(cuda_bs, int)) or (cuda_bs <= 0):
         raise ValueError('Incorrect value (%s) for parameter cuda_bs' % cuda_bs
                          + ' which has to be a positive integer.')
+    if (not isinstance(max_iter, int)) or (max_iter <= 0):
+        raise ValueError(
+            'Incorrect value (%s) for parameter max_iter' % max_iter
+            + ' which has to be a positive integer.')
 
     if not quiet:
         print('Starting simulation')
@@ -1059,6 +1074,9 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
     bs = cuda_bs  # Threads per block
     gs = int(math.ceil(float(n_spins) / bs))  # Blocks per grid
     stream = cuda.stream()
+
+    global MAX_ITER
+    MAX_ITER = max_iter
 
     # Create pseudorandom number generator states
     rng_states = create_xoroshiro128p_states(gs * bs, seed=seed, stream=stream)

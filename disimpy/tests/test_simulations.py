@@ -13,12 +13,6 @@ from numba.cuda.random import (create_xoroshiro128p_states,
 from .. import simulations, gradients, utils
 
 
-# This constant defines the distance by which a random walker's position is
-# separated from the surface after a collision to avoid placing the walker in
-# the surface.
-EPSILON = 1e-12
-
-
 def load_example_gradient():
     gradient = np.zeros((1, 100, 3))
     gradient[0, 1:11, 0] = 1
@@ -223,25 +217,33 @@ def test__cuda_line_ellipsoid_intersection():
 def test__cuda_reflection():
 
     @cuda.jit()
-    def test_kernel(r0, step, d, normal):
+    def test_kernel(r0, step, d, normal, epsilon):
         thread_id = cuda.grid(1)
         if thread_id >= r0.shape[0]:
             return
         simulations._cuda_reflection(
-            r0[thread_id, :], step[thread_id, :], d, normal[thread_id, :])
+            r0[thread_id, :], step[thread_id, :], d, normal[thread_id, :],
+            epsilon)
         return
 
-    r0 = np.array([0.0, 0, 0])[np.newaxis, :]
-    step = np.array([0, 0, 1.0])[np.newaxis, :]
-    step /= np.linalg.norm(step)
-    normal = np.array([0, 1.0, 1.0])[np.newaxis, :]
-    normal /= np.linalg.norm(normal)
+    r0 = np.array([0., 0., 0.])[np.newaxis, :]
+    step = np.array([0., 0., 1.])[np.newaxis, :]
     d = .5
+    normal = np.array([0., 1., 1.])[np.newaxis, :]
+    normal /= np.linalg.norm(normal)
     stream = cuda.stream()
-    test_kernel[1, 128, stream](r0, step, d, normal)
+    test_kernel[1, 128, stream](r0, step, d, normal, 0.)
     stream.synchronize()
-    npt.assert_almost_equal(step, np.array([[0, -1, 0]]))
-    npt.assert_almost_equal(r0, np.array([[0, -EPSILON, 0.5]]))
+    npt.assert_almost_equal(step, np.array([[0., -1., 0.]]))
+    npt.assert_almost_equal(r0, np.array([[0., 0., .5]]))
+
+    r0 = np.array([0., 0., 0.])[np.newaxis, :]
+    step = np.array([0., 0., 1.])[np.newaxis, :]
+    stream = cuda.stream()
+    test_kernel[1, 128, stream](r0, step, d, normal, .5)
+    stream.synchronize()
+    npt.assert_almost_equal(step, np.array([[0., -1., 0.]]))
+    npt.assert_almost_equal(r0, np.array([[0., 0., .5]] + normal * .5))
     return
 
 

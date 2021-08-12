@@ -112,7 +112,7 @@ def ellipsoid(semiaxes, R=np.eye(3)):
     return substrate
 
 
-def mesh(triangles, periodic=False, init_pos='uniform', n_sv=10):
+def mesh(triangles, periodic=False, init_pos='uniform', padding=0, n_sv=10):
     """Return substrate object for simulating diffusion restricted by a
     triangular mesh.
 
@@ -143,11 +143,11 @@ def mesh(triangles, periodic=False, init_pos='uniform', n_sv=10):
         define a closed surface if 'intra' or 'extra' are used. The initial
         positions are shifted like the triangles so that the corner of the axis-
         aligned bounding box of the triangles is at the origin.
-    n_sv : tuple, optional
-        Tuple of ints of length 3 defining the number of subvoxels along each
-        axis into which the simulated voxel is divided to accelerate the
-        algorithm that checks if a random walker step intersects with a
-        triangle.
+    padding : numpy.ndarray
+        An array of shape (3,) defining the padding.
+    n_sv : int, optional
+        The voxel is divided into n_sv^3 subvoxels to accelerate the algorithm
+        that checks if a random walker step intersects with a triangle.
 
     Returns
     -------
@@ -166,12 +166,10 @@ def mesh(triangles, periodic=False, init_pos='uniform', n_sv=10):
                 init_pos.shape[1] != 3):
             raise ValueError(
                 'Incorrect value (%s) for init_pos.' % init_pos)
-    #if (not isinstance(n_sv, tuple) or len(n_sv) != 3 or
-    #        np.any([not isinstance(i, int) for i in n_sv])):
     if not isinstance(n_sv, int) or n_sv < 1:
         raise ValueError(
             'Incorrect value (%s) for n_sv.' % n_sv)
-    triangles = triangles - np.min(np.min(triangles, 0), 0)
+    triangles = triangles - np.min(triangles, axis=(0, 1))
     substrate = _Substrate(
         'mesh', triangles=triangles, periodic=periodic, init_pos=init_pos,
         n_sv=n_sv)

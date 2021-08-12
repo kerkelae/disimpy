@@ -1,4 +1,4 @@
-"""This module contains code for executing diffusion MRI simulations."""
+"""This module contains code for executing diffusion-weighted MR simulations."""
 
 import os
 import time
@@ -15,21 +15,18 @@ from warnings import warn
 from . import utils, substrates
 
 
-GAMMA = 267.513e6 # Gyromagnetic ratio of the simulated spin
-
-
 @cuda.jit(device=True)
-def _cuda_dot_product(A, B):
+def _cuda_dot_product(a, b):
     """Calculate the dot product between two 1D arrays of length 3."""
-    return A[0] * B[0] + A[1] * B[1] + A[2] * B[2]
+    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
 
 
 @cuda.jit(device=True)
-def _cuda_cross_product(A, B, C):
+def _cuda_cross_product(a, b, c):
     """Calculate the cross product between two 1D arrays of length 3."""
-    C[0] = A[1] * B[2] - A[2] * B[1]
-    C[1] = A[2] * B[0] - A[0] * B[2]
-    C[2] = A[0] * B[1] - A[1] * B[0]
+    c[0] = a[1] * b[2] - a[2] * b[1]
+    c[1] = a[2] * b[0] - a[0] * b[2]
+    c[2] = a[0] * b[1] - a[1] * b[0]
     return
 
 
@@ -85,7 +82,7 @@ def _cuda_line_sphere_intersection(r0, step, radius):
 
 @cuda.jit(device=True)
 def _cuda_line_ellipsoid_intersection(r0, step, semiaxes):
-    """Calculate the distance from r0 to an axis aligned ellipsoid centered at
+    """Calculate the distance from r0 to an axis-aligned ellipsoid centered at
     origin along step. r0 must be inside the ellipsoid."""
     a = semiaxes[0]
     b = semiaxes[1]
@@ -115,7 +112,7 @@ def _cuda_reflection(r0, step, d, normal, epsilon):
         step[i] = (
             (v[i] - 2 * dp * normal[i] + intersection[i]) - intersection[i])
     _cuda_normalize_vector(step)
-    for i in range(3):  # Move walker away from the surface
+    for i in range(3):  # Move walker slightly away from the surface
         r0[i] = intersection[i] + epsilon * normal[i]
     return
 
@@ -361,19 +358,19 @@ def _subvoxel_to_triangle_mapping(mesh, sv_borders):
 
 
 @numba.jit()
-def _c_cross(A, B):
+def _c_cross(a, b):
     """Compiled function for cross product between two 1D arrays of length 3."""
-    C = np.zeros(3)
-    C[0] = A[1] * B[2] - A[2] * B[1]
-    C[1] = A[2] * B[0] - A[0] * B[2]
-    C[2] = A[0] * B[1] - A[1] * B[0]
-    return C
+    c = np.zeros(3)
+    c[0] = a[1] * b[2] - a[2] * b[1]
+    c[1] = a[2] * b[0] - a[0] * b[2]
+    c[2] = a[0] * b[1] - a[1] * b[0]
+    return c
 
 
 @numba.jit()
-def _c_dot(A, B):
+def _c_dot(a, b):
     """Compiled function for dot product between two 1D arrays of length 3."""
-    return A[0] * B[0] + A[1] * B[1] + A[2] * B[2]
+    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
 
 
 @numba.jit()
@@ -421,6 +418,66 @@ def _triangle_intersection_check(A, B, C, r0, step):
             return np.nan
     else:
         return np.nan
+
+
+@cuda.jit()
+def _cuda_fill_mesh(positions, rng_states, triangles, voxel_size, intra):
+    """Sample points from a uniform distribution inside or outside the surface
+    defined by a triangular mesh."""
+    thread_id = cuda.grid(1)
+    if thread_id >= positions.shape[0] or positions[thread_id, 0] != math.inf:
+        return
+    position = cuda.local.array(3, numba.double)
+    for i in range(3):
+        position[i] = xoroshiro128p_uniform_float64(
+            rng_states, thread_id) * voxel_size[i]
+    ray = cuda.local.array(3, numba.double)
+    _cuda_random_step(ray, rng_states, thread_id)
+    intersections = 0
+    for tri_idx in range(0, len(triangles), 9):
+        A = triangles[tri_idx:tri_idx + 3]
+        B = triangles[tri_idx + 3:tri_idx + 6]
+        C = triangles[tri_idx + 6:tri_idx + 9]
+        d = _cuda_ray_triangle_intersection_check(
+            A, B, C, position, ray)
+        if d > 0:
+            intersections += 1  
+    if intra:
+        if intersections % 2 == 1:
+            for i in range(3):
+                positions[thread_id, i] = position[i]
+    else:
+        if intersections % 2 == 0:
+            for i in range(3):
+                positions[thread_id, i] = position[i]
+    return
+
+
+def _fill_mesh(n_walkers, triangles, voxel_size, intra, extra, cuda_bs, seed):
+    """Sample points from a uniform distribution."""
+    if intra and extra:
+        return np.random.random((n_walkers, 3)) * voxel_size
+    cuda_bs = bs
+    cuda_gs = int(math.ceil(float(n_walkers) / bs))
+    stream = cuda.stream()
+    rng_states = create_xoroshiro128p_states(gs * bs, seed=seed, stream=stream)
+    positions = np.ones((n_walkers, 3)) * math.inf
+    d_positions = cuda.to_device(
+        np.ascontiguousarray(positions), stream=stream)
+    d_triangles = cuda.to_device(
+        np.ascontiguousarray(triangles.ravel()), stream=stream)
+    d_voxel_size = cuda.to_device(
+        np.ascontiguousarray(voxel_size), stream=stream)
+    while np.any(np.isinf(positions)):
+        if intra:
+            _cuda_fill_mesh[gs, bs, stream](
+                d_positions, rng_states, d_triangles, d_voxel_size, True)
+            positions = d_positions.copy_to_host(stream=stream)
+        else:
+            _cuda_fill_mesh[gs, bs, stream](
+                d_positions, rng_states, d_triangles, d_voxel_size, False)
+            positions = d_positions.copy_to_host(stream=stream)
+    return positions
 
 
 def _fill_mesh(n_s, mesh, sv_borders, tri_indices, sv_mapping, intra, extra,
@@ -514,56 +571,69 @@ def _fill_mesh(n_s, mesh, sv_borders, tri_indices, sv_mapping, intra, extra,
 
 
 def _AABB_to_mesh(A, B):
-    """Return a mesh that corresponds to an axis aligned bounding box defined by
-    A and B."""
-    tri_1 = np.vstack((np.array([A[0], A[1], A[2]]),
-                       np.array([B[0], A[1], A[2]]),
-                       np.array([B[0], B[1], A[2]])))
-    tri_2 = np.vstack((np.array([A[0], A[1], A[2]]),
-                       np.array([A[0], B[1], A[2]]),
-                       np.array([B[0], B[1], A[2]])))
-    tri_3 = np.vstack((np.array([A[0], A[1], B[2]]),
-                       np.array([B[0], A[1], B[2]]),
-                       np.array([B[0], B[1], B[2]])))
-    tri_4 = np.vstack((np.array([A[0], A[1], B[2]]),
-                       np.array([A[0], B[1], B[2]]),
-                       np.array([B[0], B[1], B[2]])))
-    tri_5 = np.vstack((np.array([A[0], A[1], A[2]]),
-                       np.array([B[0], A[1], A[2]]),
-                       np.array([B[0], A[1], B[2]])))
-    tri_6 = np.vstack((np.array([A[0], A[1], A[2]]),
-                       np.array([A[0], A[1], B[2]]),
-                       np.array([B[0], A[1], B[2]])))
-    tri_7 = np.vstack((np.array([A[0], B[1], A[2]]),
-                       np.array([B[0], B[1], A[2]]),
-                       np.array([B[0], B[1], B[2]])))
-    tri_8 = np.vstack((np.array([A[0], B[1], A[2]]),
-                       np.array([A[0], B[1], B[2]]),
-                       np.array([B[0], B[1], B[2]])))
-    tri_9 = np.vstack((np.array([A[0], A[1], A[2]]),
-                       np.array([A[0], B[1], A[2]]),
-                       np.array([A[0], B[1], B[2]])))
-    tri_10 = np.vstack((np.array([A[0], A[1], A[2]]),
-                        np.array([A[0], A[1], B[2]]),
-                        np.array([A[0], B[1], B[2]])))
-    tri_11 = np.vstack((np.array([B[0], A[1], A[2]]),
-                        np.array([B[0], B[1], A[2]]),
-                        np.array([B[0], B[1], B[2]])))
-    tri_12 = np.vstack((np.array([B[0], A[1], A[2]]),
-                        np.array([B[0], A[1], B[2]]),
-                        np.array([B[0], B[1], B[2]])))
-    mesh = np.concatenate((tri_1[np.newaxis, :, :],
-                           tri_2[np.newaxis, :, :],
-                           tri_3[np.newaxis, :, :],
-                           tri_4[np.newaxis, :, :],
-                           tri_5[np.newaxis, :, :],
-                           tri_6[np.newaxis, :, :],
-                           tri_7[np.newaxis, :, :],
-                           tri_8[np.newaxis, :, :],
-                           tri_9[np.newaxis, :, :],
-                           tri_10[np.newaxis, :, :],
-                           tri_11[np.newaxis, :, :],
-                           tri_12[np.newaxis, :, :]), axis=0)
+    """Return a triangular mesh that corresponds to an axis aligned bounding box
+    defined by points A and B."""
+    tri_1 = np.vstack((
+        np.array([A[0], A[1], A[2]]),
+        np.array([B[0], A[1], A[2]]),
+        np.array([B[0], B[1], A[2]])))
+    tri_2 = np.vstack((
+        np.array([A[0], A[1], A[2]]),
+        np.array([A[0], B[1], A[2]]),
+        np.array([B[0], B[1], A[2]])))
+    tri_3 = np.vstack((
+        np.array([A[0], A[1], B[2]]),
+        np.array([B[0], A[1], B[2]]),
+        np.array([B[0], B[1], B[2]])))
+    tri_4 = np.vstack((
+        np.array([A[0], A[1], B[2]]),
+        np.array([A[0], B[1], B[2]]),
+        np.array([B[0], B[1], B[2]])))
+    tri_5 = np.vstack((
+        np.array([A[0], A[1], A[2]]),
+        np.array([B[0], A[1], A[2]]),
+        np.array([B[0], A[1], B[2]])))
+    tri_6 = np.vstack((
+        np.array([A[0], A[1], A[2]]),
+        np.array([A[0], A[1], B[2]]),
+        np.array([B[0], A[1], B[2]])))
+    tri_7 = np.vstack((
+        np.array([A[0], B[1], A[2]]),
+        np.array([B[0], B[1], A[2]]),
+        np.array([B[0], B[1], B[2]])))
+    tri_8 = np.vstack((
+        np.array([A[0], B[1], A[2]]),
+        np.array([A[0], B[1], B[2]]),
+        np.array([B[0], B[1], B[2]])))
+    tri_9 = np.vstack((
+        np.array([A[0], A[1], A[2]]),
+        np.array([A[0], B[1], A[2]]),
+        np.array([A[0], B[1], B[2]])))
+    tri_10 = np.vstack((
+        np.array([A[0], A[1], A[2]]),
+        np.array([A[0], A[1], B[2]]),
+        np.array([A[0], B[1], B[2]])))
+    tri_11 = np.vstack((
+        np.array([B[0], A[1], A[2]]),
+        np.array([B[0], B[1], A[2]]),
+        np.array([B[0], B[1], B[2]])))
+    tri_12 = np.vstack((
+        np.array([B[0], A[1], A[2]]),
+        np.array([B[0], A[1], B[2]]),
+        np.array([B[0], B[1], B[2]])))
+    mesh = np.concatenate((
+        tri_1[np.newaxis, :, :],
+        tri_2[np.newaxis, :, :],
+        tri_3[np.newaxis, :, :],
+        tri_4[np.newaxis, :, :],
+        tri_5[np.newaxis, :, :],
+        tri_6[np.newaxis, :, :],
+        tri_7[np.newaxis, :, :],
+        tri_8[np.newaxis, :, :],
+        tri_9[np.newaxis, :, :],
+        tri_10[np.newaxis, :, :],
+        tri_11[np.newaxis, :, :],
+        tri_12[np.newaxis, :, :]), axis=0)
     return mesh
 
 
@@ -787,150 +857,82 @@ def _cuda_step_mesh(positions, g_x, g_y, g_z, phases, rng_states, t, gamma,
     iter_idx = 0
     prev_tri_idx = -1
     check_intersection = True
-    if periodic:  # Periodic boundary conditions
-        shifts = cuda.local.array(3, numba.double)
-        temp_shifts = cuda.local.array(3, numba.double)
-        temp_r0 = cuda.local.array(3, numba.double)
-        lls = cuda.local.array(3, numba.double)
-        uls = cuda.local.array(3, numba.double)
-        while check_intersection and iter_idx < max_iter:
-            iter_idx += 1
-            min_d = math.inf
-            min_idx = 0
-            for i in range(3):  # Find relevant subvoxels
-                lls[i] = ll_subvoxel_overlap_1d_periodic(
-                    sv_borders[i, :], r0[i], r0[i] + step[i] * step_l)
-                uls[i] = ul_subvoxel_overlap_1d_periodic(
-                    sv_borders[i, :], r0[i], r0[i] + step[i] * step_l)
-            for x in range(lls[0], uls[0]):  # Loop over relevant subvoxels
-                if x < 0 or x > N - 1:
-                    shift_n = math.floor(x / N)
-                    x -= shift_n * N
-                    temp_shifts[0] = shift_n * sv_borders[0, -1]
+    epsilon = max(sv_borders[0, -1], sv_borders[1, -1], sv_borders[2, -1]) * 1e-10
+    shifts = cuda.local.array(3, numba.double)
+    temp_shifts = cuda.local.array(3, numba.double)
+    temp_r0 = cuda.local.array(3, numba.double)
+    lls = cuda.local.array(3, numba.double)
+    uls = cuda.local.array(3, numba.double)
+    while check_intersection and step_l > 0 and iter_idx < max_iter:
+        iter_idx += 1
+        min_d = math.inf
+        min_idx = 0
+        for i in range(3):  # Find relevant subvoxels
+            lls[i] = ll_subvoxel_overlap_1d_periodic(
+                sv_borders[i, :], r0[i], r0[i] + step[i] * step_l)
+            uls[i] = ul_subvoxel_overlap_1d_periodic(
+                sv_borders[i, :], r0[i], r0[i] + step[i] * step_l)
+        for x in range(lls[0], uls[0]):  # Loop over relevant subvoxels
+            if x < 0 or x > N - 1:
+                shift_n = math.floor(x / N)
+                x -= shift_n * N
+                temp_shifts[0] = shift_n * sv_borders[0, -1]
+            else:
+                temp_shifts[0] = 0
+            for y in range(lls[1], uls[1]):
+                if y < 0 or y > N - 1:
+                    shift_n = math.floor(y / N)
+                    y -= shift_n * N
+                    temp_shifts[1] = shift_n * sv_borders[1, -1]
                 else:
-                    temp_shifts[0] = 0
-                for y in range(lls[1], uls[1]):
-                    if y < 0 or y > N - 1:
-                        shift_n = math.floor(y / N)
-                        y -= shift_n * N
-                        temp_shifts[1] = shift_n * sv_borders[1, -1]
+                    temp_shifts[1] = 0
+                for z in range(lls[2], uls[2]):
+                    if z < 0 or z > N - 1:
+                        shift_n = math.floor(z / N)
+                        z -= shift_n * N
+                        temp_shifts[2] = shift_n * sv_borders[2, -1]
                     else:
-                        temp_shifts[1] = 0
-                    for z in range(lls[2], uls[2]):
-                        if z < 0 or z > N - 1:
-                            shift_n = math.floor(z / N)
-                            z -= shift_n * N
-                            temp_shifts[2] = shift_n * sv_borders[2, -1]
-                        else:
-                            temp_shifts[2] = 0
-                        sv_idx = int(x * N**2 + y * N + z)
-                        for i in range(3):  # Shift walker
-                            temp_r0[i] = r0[i] - temp_shifts[i]
-                        # Loop over relevant triangles
-                        for i in range(sv_mapping[sv_idx, 0],
-                                       sv_mapping[sv_idx, 1]):
-                            tri_idx = tri_indices[i] * 9
-                            if tri_idx != prev_tri_idx:
-                                A = triangles[tri_idx:tri_idx + 3]
-                                B = triangles[tri_idx + 3:tri_idx + 6]
-                                C = triangles[tri_idx + 6:tri_idx + 9]
-                                d = _cuda_ray_triangle_intersection_check(
-                                    A, B, C, temp_r0, step)
-                                if d > 0 and d < min_d:
-                                    min_d = d
-                                    min_idx = tri_idx
-                                    for j in range(3):
-                                        shifts[j] = temp_shifts[j]
-            if min_d < step_l:  # Step intersects with closest triangle
-                A = triangles[min_idx:min_idx + 3]
-                B = triangles[min_idx + 3:min_idx + 6]
-                C = triangles[min_idx + 6:min_idx + 9]
-                normal = cuda.local.array(3, numba.double)
-                normal[0] = ((B[1] - A[1]) * (C[2] - A[2]) -
-                             (B[2] - A[2]) * (C[1] - A[1]))
-                normal[1] = ((B[2] - A[2]) * (C[0] - A[0]) -
-                             (B[0] - A[0]) * (C[2] - A[2]))
-                normal[2] = ((B[0] - A[0]) * (C[1] - A[1]) -
-                             (B[1] - A[1]) * (C[0] - A[0]))
-                _cuda_normalize_vector(normal)
-                for i in range(3):  # Shift walker to voxel
-                    r0[i] -= shifts[i]
-                _cuda_reflection(r0, step, min_d, normal, 0)
-                for i in range(3):  # Shift walker back
-                    r0[i] += shifts[i]
-                step_l -= min_d
-                prev_tri_idx = min_idx
-            else:
-                check_intersection = False
-
-    else:  # Reflective boundary conditions
-        lls = cuda.local.array(3, numba.double)
-        uls = cuda.local.array(3, numba.double)
-        while check_intersection and iter_idx < max_iter:
-            iter_idx += 1
-            min_d = math.inf
-            min_idx = 0
-            for i in range(3):  # Find relevant subvoxels
-                lls[i] = ll_subvoxel_overlap_1d(
-                    sv_borders[i, :], r0[i], r0[i] + step[i] * step_l)
-                uls[i] = ul_subvoxel_overlap_1d(
-                    sv_borders[i, :], r0[i], r0[i] + step[i] * step_l)
-            for x in range(lls[0], uls[0]):  # Loop over relevant subvoxels
-                for y in range(lls[1], uls[1]):
-                    for z in range(lls[2], uls[2]):
-                        sv_idx = x * N**2 + y * N + z
-                        # Loop over relevant triangles
-                        for i in range(sv_mapping[sv_idx, 0],
-                                       sv_mapping[sv_idx, 1]):
-                            tri_idx = tri_indices[i] * 9
-                            if tri_idx != prev_tri_idx:
-                                A = triangles[tri_idx:tri_idx + 3]
-                                B = triangles[tri_idx + 3:tri_idx + 6]
-                                C = triangles[tri_idx + 6:tri_idx + 9]
-                                d = _cuda_ray_triangle_intersection_check(
-                                    A, B, C, r0, step)
-                                if d > 0 and d < min_d:
-                                    min_d = d
-                                    min_idx = tri_idx
-            if min_d < step_l:  # Step intersects with closest triangle
-                A = triangles[min_idx:min_idx + 3]
-                B = triangles[min_idx + 3:min_idx + 6]
-                C = triangles[min_idx + 6:min_idx + 9]
-                normal = cuda.local.array(3, numba.double)
-                normal[0] = ((B[1] - A[1]) * (C[2] - A[2]) -
-                             (B[2] - A[2]) * (C[1] - A[1]))
-                normal[1] = ((B[2] - A[2]) * (C[0] - A[0]) -
-                             (B[0] - A[0]) * (C[2] - A[2]))
-                normal[2] = ((B[0] - A[0]) * (C[1] - A[1]) -
-                             (B[1] - A[1]) * (C[0] - A[0]))
-                _cuda_normalize_vector(normal)
-                _cuda_reflection(r0, step, min_d, normal, 0)
-                step_l -= min_d
-                prev_tri_idx = min_idx
-            else:
-                check_intersection = False
-            #else:
-            #    for i in range(0, 12):  # Check that walker doesn't leave voxel
-            #        tri_idx = i * 9
-            #        A = voxel_triangles[tri_idx:tri_idx + 3]
-            #        B = voxel_triangles[tri_idx + 3:tri_idx + 6]
-            #        C = voxel_triangles[tri_idx + 6:tri_idx + 9]
-            #        d = _cuda_ray_triangle_intersection_check(
-            #            A, B, C, r0, step)
-            #        if d > 0 and d < step_l:
-            #            normal = cuda.local.array(3, numba.double)
-            #            normal[0] = ((B[1] - A[1]) * (C[2] - A[2]) -
-            #                         (B[2] - A[2]) * (C[1] - A[1]))
-            #            normal[1] = ((B[2] - A[2]) * (C[0] - A[0]) -
-            #                         (B[0] - A[0]) * (C[2] - A[2]))
-            #            normal[2] = ((B[0] - A[0]) * (C[1] - A[1]) -
-            #                         (B[1] - A[1]) * (C[0] - A[0]))
-            #            _cuda_normalize_vector(normal)
-            #            _cuda_reflection(r0, step, d, normal, 0)
-            #            step_l -= d
-            #            break
-            #        elif i == 11:
-            #            check_intersection = False
+                        temp_shifts[2] = 0
+                    sv_idx = int(x * N**2 + y * N + z)
+                    for i in range(3):  # Shift walker
+                        temp_r0[i] = r0[i] - temp_shifts[i]
+                    # Loop over relevant triangles
+                    for i in range(sv_mapping[sv_idx, 0],
+                                   sv_mapping[sv_idx, 1]):
+                        tri_idx = tri_indices[i] * 9
+                        if tri_idx != prev_tri_idx:
+                            A = triangles[tri_idx:tri_idx + 3]
+                            B = triangles[tri_idx + 3:tri_idx + 6]
+                            C = triangles[tri_idx + 6:tri_idx + 9]
+                            d = _cuda_ray_triangle_intersection_check(
+                                A, B, C, temp_r0, step)
+                            if d > 0 and d < min_d:
+                                min_d = d
+                                min_idx = tri_idx
+                                for j in range(3):
+                                    shifts[j] = temp_shifts[j]
+        if min_d < step_l:  # Step intersects with closest triangle
+            A = triangles[min_idx:min_idx + 3]
+            B = triangles[min_idx + 3:min_idx + 6]
+            C = triangles[min_idx + 6:min_idx + 9]
+            normal = cuda.local.array(3, numba.double)
+            normal[0] = ((B[1] - A[1]) * (C[2] - A[2]) -
+                         (B[2] - A[2]) * (C[1] - A[1]))
+            normal[1] = ((B[2] - A[2]) * (C[0] - A[0]) -
+                         (B[0] - A[0]) * (C[2] - A[2]))
+            normal[2] = ((B[0] - A[0]) * (C[1] - A[1]) -
+                         (B[1] - A[1]) * (C[0] - A[0]))
+            _cuda_normalize_vector(normal)
+            for i in range(3):  # Shift walker to voxel
+                r0[i] -= shifts[i]
+            _cuda_reflection(r0, step, min_d, normal, epsilon)
+            for i in range(3):  # Shift walker back
+                r0[i] += shifts[i]
+            step_l -= min_d + epsilon
+            prev_tri_idx = min_idx
+        else:
+            check_intersection = False
+    
     if iter_idx >= max_iter:
         iter_exc[thread_id] = True
     for i in range(3):
@@ -977,7 +979,7 @@ def _write_traj(traj, mode, positions):
 
 def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
                traj=None, final_pos=False, all_signals=False,
-               quiet=False, cuda_bs=128, max_iter=int(1e3)):
+               quiet=False, cuda_bs=128, max_iter=int(1e3), gamma=267.513e6):
     """Execute a dMRI simulation. For a detailed tutorial, please see the
     documentation at https://disimpy.readthedocs.io/en/latest/tutorial.html.
 
@@ -1014,6 +1016,8 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
     max_iter : int, optional
         The maximum number of iterations in the algorithm that checks if a
         random walker collides with a surface during a time step.
+    gamma : float, optional
+        Gyromagnetic ratio of the simulated spins.
 
     Returns
     -------
@@ -1105,7 +1109,7 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
         for t in range(gradient.shape[1]):
             _cuda_step_free[gs, bs, stream](
                 d_positions, d_g_x, d_g_y, d_g_z, d_phases, rng_states, t,
-                GAMMA, step_l, dt)
+                gamma, step_l, dt)
             stream.synchronize()
             if traj:
                 positions = d_positions.copy_to_host(stream=stream)
@@ -1136,7 +1140,7 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
         for t in range(gradient.shape[1]):
             _cuda_step_cylinder[gs, bs, stream](
                 d_positions, d_g_x, d_g_y, d_g_z, d_phases, rng_states, t,
-                GAMMA, step_l, dt, radius, R, R_inv, d_iter_exc, max_iter)
+                gamma, step_l, dt, radius, R, R_inv, d_iter_exc, max_iter)
             stream.synchronize()
             if traj:
                 positions = d_positions.copy_to_host(stream=stream)
@@ -1161,7 +1165,7 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
         for t in range(gradient.shape[1]):
             _cuda_step_sphere[gs, bs, stream](
                 d_positions, d_g_x, d_g_y, d_g_z, d_phases, rng_states, t,
-                GAMMA, step_l, dt, radius, d_iter_exc, max_iter)
+                gamma, step_l, dt, radius, d_iter_exc, max_iter)
             stream.synchronize()
             if traj:
                 positions = d_positions.copy_to_host(stream=stream)
@@ -1191,7 +1195,7 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
         for t in range(gradient.shape[1]):
             _cuda_step_ellipsoid[gs, bs, stream](
                 d_positions, d_g_x, d_g_y, d_g_z, d_phases, rng_states, t,
-                GAMMA, step_l, dt, d_semiaxes, R, R_inv, d_iter_exc, max_iter)
+                gamma, step_l, dt, d_semiaxes, R, R_inv, d_iter_exc, max_iter)
             stream.synchronize()
             if traj:
                 positions = d_positions.copy_to_host(stream=stream)
@@ -1204,22 +1208,15 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
     elif substrate.type == 'mesh':
 
         triangles = substrate.triangles
-        n_sv = substrate.n_sv
         periodic = substrate.periodic
+        n_sv = substrate.n_sv
 
         # Calculate subvoxel division
         if not quiet:
             print("Calculating subvoxel division", end="\r")
         sv_borders = _mesh_space_subdivision(triangles, n_sv)
-        #if step_l > min(np.max(np.max(mesh, 0), 0)):
-        #    raise ValueError('Step length is too long for good results. ' +
-        #                     'Please increase number of time steps or lower' +
-        #                     'diffusivity.')
         tri_indices, sv_mapping = _subvoxel_to_triangle_mapping(
             triangles, sv_borders)
-        d_sv_borders = cuda.to_device(sv_borders, stream=stream)
-        d_tri_indices = cuda.to_device(tri_indices, stream=stream)
-        d_sv_mapping = cuda.to_device(sv_mapping, stream=stream)
 
         # Calculate initial positions
         if isinstance(substrate.init_pos, np.ndarray): 
@@ -1245,29 +1242,29 @@ def simulation(n_spins, diffusivity, gradient, dt, substrate, seed=123,
         if traj:
             _write_traj(traj, 'w', positions)
 
-        d_positions = cuda.to_device(
-            np.ascontiguousarray(positions), stream=stream)
-
-
         if not periodic:  # Append the voxel triangles to the end
             voxel_triangles = _AABB_to_mesh(
-                np.min(np.min(triangles, 0), 0), np.max(np.max(triangles, 0), 0))
+                np.max(triangles, axis=(0, 1)),
+                np.min(triangles, axis=(0, 1)))
             triangles = np.vstack((triangles, voxel_triangles))
             sv_borders = _mesh_space_subdivision(triangles, n_sv)
             tri_indices, sv_mapping = _subvoxel_to_triangle_mapping(
                 triangles, sv_borders)
-            d_sv_borders = cuda.to_device(sv_borders, stream=stream)
-            d_tri_indices = cuda.to_device(tri_indices, stream=stream)
-            d_sv_mapping = cuda.to_device(sv_mapping, stream=stream)
-
+        
+        # Move arrays to the GPU
+        d_sv_borders = cuda.to_device(sv_borders, stream=stream)
+        d_tri_indices = cuda.to_device(tri_indices, stream=stream)
+        d_sv_mapping = cuda.to_device(sv_mapping, stream=stream)
         d_triangles = cuda.to_device(
             np.ascontiguousarray(triangles.ravel()), stream=stream)
+        d_positions = cuda.to_device(
+            np.ascontiguousarray(positions), stream=stream)
 
         # Run simulation
         for t in range(gradient.shape[1]):
             _cuda_step_mesh[gs, bs, stream](d_positions, d_g_x, d_g_y,
                                             d_g_z, d_phases, rng_states, t,
-                                            GAMMA, step_l, dt, d_triangles,
+                                            gamma, step_l, dt, d_triangles,
                                             d_sv_borders, d_sv_mapping,
                                             d_tri_indices,
                                             d_iter_exc, max_iter, periodic)

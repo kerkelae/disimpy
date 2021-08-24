@@ -19,13 +19,14 @@ class _Substrate:
             self.R = kwargs['R']
         elif self.type == 'mesh':
             self.triangles = kwargs['triangles']
+            self.voxel_size = kwargs['voxel_size']
             self.periodic = kwargs['periodic']
             self.init_pos = kwargs['init_pos']
             self.n_sv = kwargs['n_sv']
 
 
 def free():
-    """Return substrate object for simulating free diffusion.
+    """Return a substrate object instance for simulating free diffusion.
 
     Returns
     -------
@@ -37,7 +38,8 @@ def free():
 
 
 def sphere(radius):
-    """Return substrate object for simulating diffusion inside a sphere.
+    """Return a substrate object instance for simulating diffusion inside a
+    sphere.
 
     Parameters
     ----------
@@ -51,14 +53,14 @@ def sphere(radius):
     """
     if not isinstance(radius, float) or radius <= 0:
         raise ValueError(
-            'Incorrect value (%s) for radius.' % radius)
+            'Incorrect value (%s) for radius' % radius)
     substrate = _Substrate('sphere', radius=radius)
     return substrate
 
 
 def cylinder(radius, orientation):
-    """Return substrate object for simulating diffusion inside an infinite
-    cylinder.
+    """Return a substrate object instance for simulating diffusion inside an
+    infinite cylinder.
 
     Parameters
     ----------
@@ -74,17 +76,18 @@ def cylinder(radius, orientation):
     """
     if not isinstance(radius, float) or radius <= 0:
         raise ValueError(
-            'Incorrect value (%s) for radius.' % radius)
+            'Incorrect value (%s) for radius' % radius)
     if not isinstance(orientation, np.ndarray) or orientation.shape != (3,):
         raise ValueError(
-            'Incorrect value (%s) for orientation.' % orientation)
+            'Incorrect value (%s) for orientation' % orientation)
     orientation = orientation.astype(float) / np.linalg.norm(orientation)
     substrate = _Substrate('cylinder', radius=radius, orientation=orientation)
     return substrate
 
 
 def ellipsoid(semiaxes, R=np.eye(3)):
-    """Return substrate object for simulating diffusion inside an ellipsoid.
+    """Return a substrate object instance for simulating diffusion inside an
+    ellipsoid.
 
     Parameters
     ----------
@@ -102,19 +105,26 @@ def ellipsoid(semiaxes, R=np.eye(3)):
     """
     if not isinstance(semiaxes, np.ndarray) or semiaxes.shape != (3,):
         raise ValueError(
-            'Incorrect value (%s) for semiaxes.' % semiaxes)
+            'Incorrect value (%s) for semiaxes' % semiaxes)
     if not isinstance(R, np.ndarray) or R.shape != (3, 3):
         raise ValueError(
-            'Incorrect value (%s) for R.' % R)
+            'Incorrect value (%s) for R' % R)
+    elif (not np.isclose(np.linalg.det(R), 1) or not
+          np.all(np.isclose(R.T, np.linalg.inv(R)))):
+        raise ValueError(
+            'R (%s) is not a valid rotation matrix' % R)
     semiaxes = semiaxes.astype(float)
     R = R.astype(float)
     substrate = _Substrate('ellipsoid', semiaxes=semiaxes, R=R)
     return substrate
 
 
-def mesh(triangles, periodic=False, init_pos='uniform', padding=0, n_sv=10):
-    """Return substrate object for simulating diffusion restricted by a
-    triangular mesh.
+def mesh(triangles, padding=np.array([0, 0, 0]), periodic=False,
+         init_pos='uniform', n_sv=10):
+    """Return a substrate object instance for simulating diffusion restricted by
+    a triangular mesh. The triangles are shifted so that the lower corner of the
+    simulated voxel is at the origin. The size of the simulated voxel is equal
+    to the axis-aligned bounding box of the triangles plus padding.
 
     Parameters
     ----------
@@ -122,55 +132,68 @@ def mesh(triangles, periodic=False, init_pos='uniform', padding=0, n_sv=10):
         Array of shape (number of triangles, 3, 3) where the second dimension
         indices correspond to different triangle points and the third dimension
         indices correspond to the Cartesian coordinates of the points of the
-        triangle. The triangles are shifted so that the corner of the axis-
-        aligned bounding box of the triangles is at the origin.
+        triangle.
+    padding : np.ndarray, optional
+        Array of shape (3,) defining how much empty space there is between the
+        axis-aligned bounding box of the triangles and the boundaries of the
+        simulated voxel along each axis.
     periodic : bool, optional
         If True, periodic boundary conditions are used, i.e., the random walkers
-        can leave the axis-aligned bounding box of the set of triangles and
-        encounter repeating copies of the mesh. If False, the axis-aligned
-        bounding box of the triangles is considered an impermeable surface.
+        can leave the simulated voxel and encounter infinitely repeating copies
+        of the triangular mesh. If False, the boundaries of the simulated voxel
+        form an impermeable surface.
     init_pos : numpy.ndarray or str, optional
         An array of shape (number of random walkers, 3) defining the initial
-        position of each walker within the axis-aligned bounding box of the
-        triangles or one of the following strings: 'uniform', 'intra', 'extra'.
-        If 'uniform', the initial positions are sampled from a uniform
-        distribution over the axis-aligned bounding box of the triangles. If
-        'intra', the initial positions are sampled from a uniform distribution
-        inside the surface defined by the triangular mesh. If 'extra', the
-        initial positions are sampled from a uniform distribution over the axis-
-        aligned bounding box of the triangles excluding the volume inside the
+        position of each walker within the simulated voxel or one of the
+        following strings: 'uniform', 'intra', 'extra'. If 'uniform', the
+        initial positions are sampled from a uniform distribution over the
+        simulated voxel. If 'intra', the initial positions are sampled from a
+        uniform distribution inside the surface defined by the triangular mesh.
+        If 'extra', the initial positions are sampled from a uniform
+        distribution over the simulated voxel excluding the volume inside the
         surface defined by the triangular mesh. Note that the triangles must
-        define a closed surface if 'intra' or 'extra' are used. The initial
-        positions are shifted like the triangles so that the corner of the axis-
-        aligned bounding box of the triangles is at the origin.
-    padding : numpy.ndarray
-        An array of shape (3,) defining the padding.
+        define a closed surface if 'intra' or 'extra' are used.
     n_sv : int, optional
-        The voxel is divided into n_sv^3 subvoxels to accelerate the algorithm
-        that checks if a random walker step intersects with a triangle.
+        Integer controlling the number of subvoxels into which the simulated
+        voxel is divided to accelerate the algorithm that checks if a random
+        walker step intersects with a triangle. The number of subvoxels is equal
+        to n_sv^3.
 
     Returns
     -------
     substrate : disimpy.substrates._Substrate
         Substrate object.
     """
-    if (not isinstance(triangles, np.ndarray) or len(triangles.shape) != 3 or
+    if (not isinstance(triangles, np.ndarray) or triangles.ndim != 3 or
             triangles.shape[1::] != (3, 3)):
         raise ValueError(
             'Incorrect value (%s) for triangles.' % triangles)
+    if not isinstance(padding, np.ndarray) or padding.shape != (3,):
+        raise ValueError(
+            'Incorrect value (%s) for padding' % padding)
     if not isinstance(periodic, bool):
         raise ValueError(
             'Incorrect value (%s) for periodic.' % periodic)
-    if init_pos != 'uniform' and init_pos != 'intra' and init_pos != 'extra':
-        if (not isinstance(init_pos, np.ndarray) or len(init_pos) != 2 or
-                init_pos.shape[1] != 3):
+    if isinstance(init_pos, str):
+        if (init_pos != 'uniform' and init_pos != 'intra' and
+                init_pos != 'extra'):
+            raise ValueError(
+                'Incorrect value (%s) for init_pos.' % init_pos)
+    elif isinstance(init_pos, np.ndarray):
+        if init_pos.ndim != 2 or init_pos.shape[1] != 3:
             raise ValueError(
                 'Incorrect value (%s) for init_pos.' % init_pos)
     if not isinstance(n_sv, int) or n_sv < 1:
         raise ValueError(
             'Incorrect value (%s) for n_sv.' % n_sv)
-    triangles = triangles - np.min(triangles, axis=(0, 1))
+    triangles = triangles - np.min(triangles, axis=(0, 1)) + padding
+    voxel_size = np.max(triangles, axis=(0, 1)) + padding
+    if isinstance(init_pos, np.ndarray):
+        if (np.min(init_pos) < 0 or
+                np.any(np.max(init_pos, axis=0) > voxel_size)):
+            raise ValueError(
+                'The initial positions must be inside the simulated voxel')
     substrate = _Substrate(
-        'mesh', triangles=triangles, periodic=periodic, init_pos=init_pos,
-        n_sv=n_sv)
+        'mesh', triangles=triangles, voxel_size=voxel_size, periodic=periodic,
+        init_pos=init_pos, n_sv=n_sv)
     return substrate

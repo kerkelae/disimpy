@@ -469,10 +469,10 @@ def _fill_mesh(n_s, mesh, sv_borders, tri_indices, sv_mapping, intra, extra,
             while not valid:
                 intersections = 0
                 r0 = np.random.random(3) * voxel_size
-                #step = np.array([1., 0, 0]) * voxel_size
-                step = np.random.random()
-                step /= np.linalg.norm(step)
-                step *= voxel_size
+                step = np.array([1., 0, 0]) * voxel_size
+                #step = np.random.random()
+                #step /= np.linalg.norm(step)
+                #step *= voxel_size
                 x_ll, x_ul = _interval_sv_overlap_1d(
                     sv_borders[0, :], r0[0], (r0 + step)[0])
                 y_ll, y_ul = _interval_sv_overlap_1d(

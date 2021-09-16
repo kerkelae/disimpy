@@ -9,7 +9,7 @@ import numpy as np
 import scipy.integrate
 
 
-GAMMA = 267.513e6 # Gyromagnetic ratio of the simulated spin
+GAMMA = 267.513e6  # Gyromagnetic ratio of the simulated spins
 
 
 def interpolate_gradient(gradient, dt, n_t):

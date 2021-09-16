@@ -1,4 +1,4 @@
-"""This module contains unit tests of the gradients module."""
+"""This module contains tests of the gradients module."""
 
 import os
 import numpy as np
@@ -8,10 +8,10 @@ from .. import gradients
 
 
 def load_example_gradient():
-    T = 80e-3  # Duration of gradient array
-    gradient_file = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                 'example_gradient.txt')
-    gradient = np.loadtxt(gradient_file)[np.newaxis, :, :]
+    T = 80e-3
+    gradient = np.zeros((1, 100, 3))
+    gradient[0, 1:11, 0] = 1
+    gradient[0, -11:-1, 0] = -1
     dt = T / (gradient.shape[1] - 1)
     return gradient, dt
 

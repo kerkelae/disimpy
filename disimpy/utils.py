@@ -82,17 +82,13 @@ def show_traj(traj_file, show=True):
     return
 
 
-def show_mesh(mesh, show=True):
-    """Visualize the triangular mesh with random triangle colours.
+def show_mesh(substrate, show=True):
+    """Visualize a triangular mesh with random triangle colours.
 
     Parameters
     ----------
-    mesh : numpy.ndarray
-        Mesh array of shape (n of triangles, 3, 3) where the second dimension
-        indices correspond to different triangle points and the third dimension
-        is the Cartesian coordinates of triangle.
-    show : bool
-        Whether to render figure or not.
+    substrate : disimpy.substrates._Substrate
+        Substrate object containing the triangular mesh.
 
     Returns
     -------
@@ -101,27 +97,18 @@ def show_mesh(mesh, show=True):
     np.random.seed(123)
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
-    mesh_min = np.min(np.min(mesh, 0), 0)
-    mesh_max = np.max(np.max(mesh, 0), 0)
-    ax.set_xlim([mesh_min[0], mesh_max[0]])
-    ax.set_ylim([mesh_min[1], mesh_max[1]])
-    ax.set_zlim([mesh_min[2], mesh_max[2]])
-    for triangle in mesh:
-        A = triangle[0, :]
-        B = triangle[1, :]
-        C = triangle[2, :]
-        vtx = np.array([A, B, C])
-        tri = Poly3DCollection([vtx], alpha=.5)
+    for idx in substrate.faces:
+        tri = Poly3DCollection(substrate.vertices[idx], alpha=.5)
         face_color = np.random.random(3)
         tri.set_facecolor(face_color)
         ax.add_collection3d(tri)
+    ax.set_xlim([0, substrate.voxel_size[0]])
+    ax.set_ylim([0, substrate.voxel_size[1]])
+    ax.set_zlim([0, substrate.voxel_size[2]])
     ax.set_xlabel('x')
     ax.set_ylabel('y')
     ax.set_zlabel('z')
     ax.ticklabel_format(style='sci', scilimits=(0, 0))
     fig.tight_layout()
-    if show:
-        plt.show()
-    else:
-        plt.close(fig)
+    plt.show()
     return

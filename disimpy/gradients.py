@@ -100,9 +100,9 @@ def set_b(gradient, dt, b):
         Scaled gradient array.
     """
     if np.any(b == 0):
-        raise ValueError('b can not be equal to 0. If b = 0, the simulated'
-                         + 'signal is simply equal to the number of random'
-                         + ' walkers.')
+        raise ValueError(
+            'b can not be equal to 0. If b = 0, the simulated signal is simply'
+            + ' equal to the number of random walkers.')
     ratio = b / calc_b(gradient, dt)
     scaled_g = gradient * np.sqrt(ratio)[:, np.newaxis, np.newaxis]
     return scaled_g
@@ -125,6 +125,10 @@ def rotate_gradient(gradient, Rs):
         Rotated gradient array.
     """
     g = np.zeros(gradient.shape)
-    for m, R in enumerate(Rs):
-        g[m, :, :] = np.matmul(R, gradient[m, :, :].T).T
+    for i, R in enumerate(Rs):
+        if (not np.isclose(np.linalg.det(R), 1) or
+                not np.all(np.isclose(R.T, np.linalg.inv(R)))):
+            raise ValueError(
+                'Rs[%s] (%s) is not a valid rotation matrix' % (i, R))
+        g[i, :, :] = np.matmul(R, gradient[i, :, :].T).T
     return g

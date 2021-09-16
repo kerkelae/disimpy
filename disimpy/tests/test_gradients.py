@@ -92,4 +92,8 @@ def test_rotate_gradient():
     d = rotated_g[0, 5, :]  # New gradient direction
     d /= np.linalg.norm(d)
     npt.assert_almost_equal(b, d)
+    Rs = np.ones((1, 3, 3))
+    npt.assert_raises
+    npt.assert_raises(
+        ValueError, gradients.rotate_gradient, gradient=gradient, Rs=Rs)
     return

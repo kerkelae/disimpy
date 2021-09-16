@@ -1,4 +1,4 @@
-"""This module contains unit tests of the utils module."""
+"""This module contains tests of the utils module."""
 
 import os
 import numpy as np

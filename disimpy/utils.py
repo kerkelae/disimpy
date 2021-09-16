@@ -52,12 +52,6 @@ def show_traj(traj_file, show=True):
         Path to trajectories file that contains walker trajectories. Every line
         represents a time point. Every line contains the positions as follows:
         walker_1_x walker_1_y walker_1_z walker_2_x walker_2_y walker_2_z...
-    show : bool
-        Whether to render the figure.
-
-    Returns
-    -------
-    None
     """
     trajectories = np.loadtxt(traj_file)
     trajectories = trajectories.reshape((trajectories.shape[0],
@@ -75,11 +69,7 @@ def show_traj(traj_file, show=True):
     ax.set_zlabel('z')
     ax.ticklabel_format(style='sci', scilimits=(0, 0))
     fig.tight_layout()
-    if show:
-        plt.show()
-    else:
-        plt.close(fig)
-    return
+    plt.show()
 
 
 def show_mesh(substrate, show=True):
@@ -89,16 +79,12 @@ def show_mesh(substrate, show=True):
     ----------
     substrate : disimpy.substrates._Substrate
         Substrate object containing the triangular mesh.
-
-    Returns
-    -------
-    None
     """
     np.random.seed(123)
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
     for idx in substrate.faces:
-        tri = Poly3DCollection(substrate.vertices[idx], alpha=.5)
+        tri = Poly3DCollection(substrate.vertices[idx], alpha=.25)
         face_color = np.random.random(3)
         tri.set_facecolor(face_color)
         ax.add_collection3d(tri)

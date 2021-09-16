@@ -1,4 +1,4 @@
-"""This module contains unit tests of the simulations module."""
+"""This module contains tests of the simulations module."""
 
 import os
 import math
@@ -14,10 +14,11 @@ from .. import simulations, gradients, utils
 
 
 def load_example_gradient():
+    T = 80e-3
     gradient = np.zeros((1, 100, 3))
     gradient[0, 1:11, 0] = 1
     gradient[0, -11:-1, 0] = -1
-    dt = 80e-3 / (gradient.shape[1] - 1)
+    dt = T / (gradient.shape[1] - 1)
     return gradient, dt
 
 
@@ -101,7 +102,7 @@ def test__cuda_random_step():
         return
 
     N = int(1e5)
-    seeds = [1, 1, 12, 123]
+    seeds = [1, 1, 12]
     steps = np.zeros((len(seeds), N, 3))
     block_size = 128
     grid_size = int(math.ceil(N / block_size))

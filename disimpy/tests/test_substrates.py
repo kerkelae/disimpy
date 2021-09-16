@@ -24,7 +24,7 @@ def test_sphere():
 
 
 def test_cylinder():
-    orientation = np.array([1, 2, 0])
+    orientation = np.array([1., 2, 0])
     npt.assert_raises(
         ValueError, substrates.cylinder, radius='r', orientation=orientation)
     npt.assert_raises(
@@ -35,6 +35,9 @@ def test_cylinder():
     npt.assert_raises(
         ValueError, substrates.cylinder, radius=radius,
         orientation=np.arange(4))
+    npt.assert_raises(
+        ValueError, substrates.cylinder, radius=radius,
+        orientation=orientation.astype(int))
     substrate = substrates.cylinder(radius, orientation)
     npt.assert_equal(isinstance(substrate, substrates._Substrate), True)
     npt.assert_equal(substrate.radius, radius)

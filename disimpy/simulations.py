@@ -581,7 +581,7 @@ def _aabb_to_mesh(a, b):
 
 
 @cuda.jit(device=True)
-def ll_subvoxel_overlap_1d(xs, x1, x2):
+def _ll_subvoxel_overlap_1d(xs, x1, x2):
     """For an interval [x1, x2], return the index of the lower limit of the
     overlapping subvoxels whose borders are defined by the elements of xs."""
     xmin = min(x1, x2)
@@ -600,7 +600,7 @@ def ll_subvoxel_overlap_1d(xs, x1, x2):
 
 
 @cuda.jit(device=True)
-def ul_subvoxel_overlap_1d(xs, x1, x2):
+def _ul_subvoxel_overlap_1d(xs, x1, x2):
     """For an interval [x1, x2], return the index of the upper limit of the
     overlapping subvoxels whose borders are defined by the elements of xs."""
     xmax = max(x1, x2)
@@ -786,28 +786,58 @@ def _cuda_step_mesh(positions, g_x, g_y, g_z, phases, rng_states, t, step_l, dt,
                     vertices, faces, xs, ys, zs, subvoxel_indices,
                     triangle_indices, iter_exc, max_iter, n_sv, epsilon):
     """Kernel function for diffusion restricted by a triangular mesh."""
+
     thread_id = cuda.grid(1)
     if thread_id >= positions.shape[0]:
         return
+
+    # Allocate memory
     step = cuda.local.array(3, numba.float64)
-    _cuda_random_step(step, rng_states, thread_id)
-    r0 = cuda.local.array(3, numba.float64)
-    r0 = positions[thread_id, :]
-    iter_idx = 0
-
-
     triangle = cuda.local.array((3, 3), numba.float64)
-    for idx in faces:  # Loop over triangles
-        for i in range(3):
-            for j in range(3):
-                triangle[i, j] = vertices[idx[i], j]
-        d = _cuda_ray_triangle_intersection_check(triangle, r0, step)
-        if d > 0 and d < step_l:
-            step_l = 0
+    lls = cuda.local.array(3, numba.int64)
+    uls = cuda.local.array(3, numba.int64)
+
+    # Get position and generate step
+    r0 = positions[thread_id, :]
+    _cuda_random_step(step, rng_states, thread_id)
+
+
+    # Find the relevant subvoxels for the step
+    lls[0] = _ll_subvoxel_overlap_1d(xs, r0[0], r0[0] + step[0] * step_l)
+    lls[1] = _ll_subvoxel_overlap_1d(ys, r0[1], r0[1] + step[1] * step_l)
+    lls[2] = _ll_subvoxel_overlap_1d(zs, r0[2], r0[2] + step[2] * step_l)
+    uls[0] = _ul_subvoxel_overlap_1d(xs, r0[0], r0[0] + step[0] * step_l)
+    uls[1] = _ul_subvoxel_overlap_1d(ys, r0[1], r0[1] + step[1] * step_l)
+    uls[2] = _ul_subvoxel_overlap_1d(zs, r0[2], r0[2] + step[2] * step_l)
+
+    # Loop over subvoxels and fnd the closest triangle
+    for x in range(lls[0], uls[0]):
+        for y in range(lls[1], uls[1]):
+            for z in range(lls[2], uls[2]):
+                subvoxel = int(x * n_sv[1] * n_sv[2] + y * n_sv[2] + z)
+
+                # Loop over the triangles in this subvoxel
+                for a in range(subvoxel_indices[subvoxel, 0],
+                               subvoxel_indices[subvoxel, 1]):
+                    idx = faces[triangle_indices[a]]
+                    for i in range(3):
+                        for j in range(3):
+                            triangle[i, j] = vertices[idx[i], j]
+                    d = _cuda_ray_triangle_intersection_check(
+                        triangle, r0, step)
+                    if d > 0 and d < step_l:
+                        step_l = 0
+
+
+    #for idx in faces:  # Loop over triangles
+    #    for i in range(3):
+    #        for j in range(3):
+    #            triangle[i, j] = vertices[idx[i], j]
+    #    d = _cuda_ray_triangle_intersection_check(triangle, r0, step)
+    #    if d > 0 and d < step_l:
+    #        step_l = 0
 
     
-    if iter_idx >= max_iter:
-        iter_exc[thread_id] = True
     for i in range(3):
         positions[thread_id, i] = r0[i] + step[i] * step_l
     for m in range(g_x.shape[0]):

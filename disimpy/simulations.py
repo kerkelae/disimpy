@@ -824,7 +824,7 @@ def _cuda_step_mesh(positions, g_x, g_y, g_z, phases, rng_states, t, step_l, dt,
     # Check for intersection, reflect step, and repeat until no intersection
     check_intersection = True
     iter_idx = 0
-    while check_intersection and step_l > 0 and iter_idx < 100:
+    while check_intersection and step_l > 0 and iter_idx < max_iter:
         iter_idx += 1
         distance = math.inf
 
@@ -840,15 +840,15 @@ def _cuda_step_mesh(positions, g_x, g_y, g_z, phases, rng_states, t, step_l, dt,
         for x in range(lls[0], uls[0]):
             for y in range(lls[1], uls[1]):
                 for z in range(lls[2], uls[2]):
-                    subvoxel = int(x * n_sv[1] * n_sv[2] + y * n_sv[2] + z)
+                    i = int(x * n_sv[1] * n_sv[2] + y * n_sv[2] + z)
 
                     # Loop over the triangles in this subvoxel
-                    for a in range(subvoxel_indices[subvoxel, 0],
-                                   subvoxel_indices[subvoxel, 1]):
-                        idx = faces[triangle_indices[a]]
-                        for i in range(3):
-                            for j in range(3):
-                                triangle[i, j] = vertices[idx[i], j]
+                    for j in range(subvoxel_indices[i, 0],
+                                   subvoxel_indices[i, 1]):
+                        idx = faces[triangle_indices[j]]
+                        for a in range(3):
+                            for b in range(3):
+                                triangle[a, b] = vertices[idx[a], b]
                         d = _cuda_ray_triangle_intersection_check(
                             triangle, r0, step)
                         if d > 0 and d < distance:
@@ -874,16 +874,19 @@ def _cuda_step_mesh(positions, g_x, g_y, g_z, phases, rng_states, t, step_l, dt,
         else:
             check_intersection = False
 
-    # for idx in faces:  # Loop over triangles
-    #    for i in range(3):
-    #        for j in range(3):
-    #            triangle[i, j] = vertices[idx[i], j]
-    #    d = _cuda_ray_triangle_intersection_check(triangle, r0, step)
-    #    if d > 0 and d < step_l:
-    #        step_l = 0
-
     if iter_idx >= max_iter:
         iter_exc[thread_id] = True
+
+    """
+    for idx in faces:  # Loop over triangles
+        for i in range(3):
+            for j in range(3):
+                triangle[i, j] = vertices[idx[i], j]
+        d = _cuda_ray_triangle_intersection_check(triangle, r0, step)
+        if d > 0 and d < step_l:
+            step_l = 0
+    """
+    
     for i in range(3):
         positions[thread_id, i] = r0[i] + step[i] * step_l
     for m in range(g_x.shape[0]):

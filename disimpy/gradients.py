@@ -63,7 +63,7 @@ def calc_q(gradient, dt):
 
 
 def calc_b(gradient, dt):
-    """Calculate b-value(s) of the gradient array.
+    """Calculate b-values of the gradient array.
 
     Parameters
     ----------
@@ -74,8 +74,8 @@ def calc_b(gradient, dt):
 
     Returns
     -------
-    q : numpy.ndarray
-        b-value(s).
+    b : numpy.ndarray
+        b-values.
     """
     q = calc_q(gradient, dt)
     b = np.trapz(np.linalg.norm(q, axis=2)**2, axis=1, dx=dt)
@@ -83,7 +83,7 @@ def calc_b(gradient, dt):
 
 
 def set_b(gradient, dt, b):
-    """Scale the gradient array magnitude to correspond to given b-value(s).
+    """Scale the gradient array magnitude to correspond to given b-values.
 
     Parameters
     ----------
@@ -96,32 +96,32 @@ def set_b(gradient, dt, b):
 
     Returns
     -------
-    g : numpy.ndarray
-        Scaled gradient array with magnitude equal to given b-value(s).
+    scaled_g : numpy.ndarray
+        Scaled gradient array.
     """
     if np.any(b == 0):
         raise ValueError('b can not be equal to 0. If b = 0, the simulated'
                          + 'signal is simply equal to the number of random'
                          + ' walkers.')
     ratio = b / calc_b(gradient, dt)
-    gradient *= np.sqrt(ratio)[:, np.newaxis, np.newaxis]
-    return gradient
+    scaled_g = gradient * np.sqrt(ratio)[:, np.newaxis, np.newaxis]
+    return scaled_g
 
 
 def rotate_gradient(gradient, Rs):
-    """Rotate the gradient array with rotation matrix array. The gradient array
-    of each measurement is rotated by the corresponding rotation matrix.
+    """Rotate the gradient array of each measurement according to the
+    corresponding rotation matrix.
 
     Parameters
     ----------
-    gradient : ndarray
+    gradient : numpy.ndarray
         Gradient array of shape (n of measurements, n of time points, 3).
-    Rs : ndarray
-        Array of rotation matrices of shape (n of measurements, 3, 3).
+    Rs : numpy.ndarray
+        Rotation matrix array of shape (n of measurements, 3, 3).
 
     Returns
     -------
-    g : ndarray
+    g : numpy.ndarray
         Rotated gradient array.
     """
     g = np.zeros(gradient.shape)

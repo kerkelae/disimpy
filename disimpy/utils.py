@@ -72,19 +72,21 @@ def show_traj(traj_file, show=True):
     plt.show()
 
 
-def show_mesh(substrate, show=True):
+def show_mesh(substrate, alpha=.5, show=True):
     """Visualize a triangular mesh with random triangle colours.
 
     Parameters
     ----------
     substrate : disimpy.substrates._Substrate
         Substrate object containing the triangular mesh.
+    alpha : float
+        Parameter controlling the triangle transparency.
     """
     np.random.seed(123)
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
     for idx in substrate.faces:
-        tri = Poly3DCollection(substrate.vertices[idx], alpha=.25)
+        tri = Poly3DCollection(substrate.vertices[idx], alpha=alpha)
         face_color = np.random.random(3)
         tri.set_facecolor(face_color)
         ax.add_collection3d(tri)

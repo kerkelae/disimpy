@@ -23,10 +23,13 @@ def load_example_gradient():
 
 
 def load_example_mesh():
-    mesh_file = os.path.join(
-        os.path.dirname(simulations.__file__), 'tests', 'example_mesh.npy')
-    mesh = np.load(mesh_file)
-    return mesh
+    mesh_path = os.path.join(
+       os.path.dirname(simulations.__file__), 'tests', 'example_mesh.pkl')
+    with open(mesh_path, 'rb') as f:
+        example_mesh = pickle.load(f)
+    faces = example_mesh['faces']
+    vertices = example_mesh['vertices']
+    return faces, vertices
 
 
 def test__cuda_dot_product():
@@ -40,13 +43,15 @@ def test__cuda_dot_product():
             a[thread_id, :], b[thread_id, :])
         return
 
-    a = np.array([1.2, 5, 3])[np.newaxis, :]
-    b = np.array([1, 3.5, -8])[np.newaxis, :]
-    dp = np.zeros(1)
-    stream = cuda.stream()
-    test_kernel[1, 128, stream](a, b, dp)
-    stream.synchronize()
-    npt.assert_almost_equal(dp[0], np.dot(a[0], b[0]))
+    np.random.seed(123)
+    for _ in range(100):
+        a = (np.random.random(3) - .5)[np.newaxis, :]
+        b = (np.random.random(3) - .5)[np.newaxis, :]
+        dp = np.zeros(1)
+        stream = cuda.stream()
+        test_kernel[1, 128, stream](a, b, dp)
+        stream.synchronize()
+        npt.assert_almost_equal(dp[0], np.dot(a[0], b[0]))
     return
 
 
@@ -61,13 +66,15 @@ def test__cuda_cross_product():
             a[thread_id, :], b[thread_id, :], cp[thread_id, :])
         return
 
-    a = np.array([1.2, 5, 3])[np.newaxis, :]
-    b = np.array([1, 3.5, -8])[np.newaxis, :]
-    cp = np.zeros(3)[np.newaxis, :]
-    stream = cuda.stream()
-    test_kernel[1, 128, stream](a, b, cp)
-    stream.synchronize()
-    npt.assert_almost_equal(cp[0], np.cross(a[0], b[0]))
+    np.random.seed(123)
+    for _ in range(100):
+        a = (np.random.random(3) - .5)[np.newaxis, :]
+        b = (np.random.random(3) - .5)[np.newaxis, :]
+        cp = np.zeros(3)[np.newaxis, :]
+        stream = cuda.stream()
+        test_kernel[1, 128, stream](a, b, cp)
+        stream.synchronize()
+        npt.assert_almost_equal(cp[0], np.cross(a[0], b[0]))
     return
 
 
@@ -81,12 +88,39 @@ def test__cuda_normalize_vector():
         simulations._cuda_normalize_vector(a[thread_id, :])
         return
 
-    a = np.array([1.2, -5, 3])[np.newaxis, :]
-    desired_a = a / np.linalg.norm(a)
-    stream = cuda.stream()
-    test_kernel[1, 128, stream](a)
-    stream.synchronize()
-    npt.assert_almost_equal(a, desired_a)
+    np.random.seed(123)
+    for _ in range(100):
+        a = (np.random.random(3) - .5)[np.newaxis, :]
+        desired_a = a / np.linalg.norm(a)
+        stream = cuda.stream()
+        test_kernel[1, 128, stream](a)
+        stream.synchronize()
+        npt.assert_almost_equal(a, desired_a)
+    return
+
+
+def test__cuda_triangle_normal():
+
+    @cuda.jit()
+    def test_kernel(triangle, normal):
+        thread_id = cuda.grid(1)
+        if thread_id >= a.shape[0]:
+            return
+        simulations._cuda_triangle_normal(
+            triangle[thread_id, :], normal[thread_id, :])
+        return
+
+    np.random.seed(123)
+    for _ in range(100):
+        triangle = (np.random.random((3, 3)) - .5)[np.newaxis, :]
+        desired = np.cross(triangle[0, 0] - triangle[0, 1], triangle[0, 0] - triangle[0, 2])
+        desired /= np.linalg.norm(desired)
+        desired = desired[np.newaxis, :]
+        normal = np.zeros(3)[np.newaxis, :]
+        stream = cuda.stream()
+        test_kernel[1, 128, stream](triangle, normal)
+        stream.synchronize()
+        npt.assert_almost_equal(normal, desired)
     return
 
 
@@ -134,15 +168,14 @@ def test__cuda_mat_mul():
         simulations._cuda_mat_mul(R, a[thread_id, :])
         return
 
-    v = np.array([1.0, 0, 0])[np.newaxis, :]
-    R = np.array([[0.20272312, -0.06456846, -0.97710504],
-                  [0.06456846, 0.99653363, -0.0524561],
-                  [0.97710504, -0.0524561, 0.20618949]])
-    desired_v = np.matmul(R, v[0])
-    stream = cuda.stream()
-    test_kernel[1, 256, stream](R, v)
-    stream.synchronize()
-    npt.assert_almost_equal(v[0], desired_v)
+    for _ in range(100):
+        v = (np.random.random(3) - .5)[np.newaxis, :]
+        R = np.random.random((3, 3)) - .5
+        desired_v = np.matmul(R, v[0])
+        stream = cuda.stream()
+        test_kernel[1, 256, stream](R, v)
+        stream.synchronize()
+        npt.assert_almost_equal(v[0], desired_v)
     return
 
 
@@ -245,6 +278,37 @@ def test__cuda_reflection():
     stream.synchronize()
     npt.assert_almost_equal(step, np.array([[0., -1., 0.]]))
     npt.assert_almost_equal(r0, np.array([[0., 0., .5]] + normal * .5))
+
+    @cuda.jit()
+    def test_kernel(triangle, r0, step, step_l, epsilon):
+        thread_id = cuda.grid(1)
+        if thread_id >= r0.shape[0]:
+            return
+        r0 = r0[thread_id]
+        step = step[thread_id]
+        triangle = triangle[thread_id]
+        d = simulations._cuda_ray_triangle_intersection_check(
+            triangle, r0, step)
+        if d > 0 and d < step_l:
+            normal = cuda.local.array(3, numba.float64)
+            simulations._cuda_triangle_normal(triangle, normal)
+            simulations._cuda_reflection(r0, step, d, normal, epsilon)
+        return
+
+    triangle = np.zeros((3, 3))
+    triangle[1, 0] = 1
+    triangle[2, 1] = 1
+    triangle = triangle[np.newaxis, ...]
+    r0 = np.array([0, 0, .5])[np.newaxis, ...]
+    step = np.array([0, 0, -1.])[np.newaxis, ...]
+    d = .5   
+    step_l = 1.
+    epsilon = 1e-10
+    stream = cuda.stream()
+    test_kernel[1, 128, stream](triangle, r0, step, step_l, epsilon)
+    stream.synchronize()
+    npt.assert_almost_equal(step, np.array([[0., 0., 1.]]))
+    npt.assert_almost_equal(r0, np.array([[0., 0., epsilon]]))
     return
 
 

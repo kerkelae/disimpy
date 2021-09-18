@@ -71,6 +71,25 @@ def _cuda_normalize_vector(v):
 
 
 @cuda.jit(device=True)
+def _cuda_triangle_normal(triangle, normal):
+    """Calculate a normal vector of a triangle.
+
+    Parameters
+    ----------
+    triangle : numba.cuda.cudadrv.devicearray.DeviceNDArray
+    normal : numba.cuda.cudadrv.devicearray.DeviceNDArray
+    """
+    v = cuda.local.array(3, numba.float64)
+    k = cuda.local.array(3, numba.float64)
+    for i in range(3):
+        v[i] = triangle[0, i] - triangle[1, i]
+        k[i] = triangle[0, i] - triangle[2, i]
+    _cuda_cross_product(v, k, normal)
+    _cuda_normalize_vector(normal)
+    return
+
+
+@cuda.jit(device=True)
 def _cuda_random_step(step, rng_states, thread_id):
     """Generate a random step from a uniform distribution over a sphere.
 
@@ -218,25 +237,6 @@ def _cuda_reflection(r0, step, d, normal, epsilon):
 
 
 @cuda.jit(device=True)
-def _cuda_triangle_normal(triangle, normal):
-    """Calculate a normal vector of a triangle.
-
-    Parameters
-    ----------
-    triangle : numba.cuda.cudadrv.devicearray.DeviceNDArray
-    normal : numba.cuda.cudadrv.devicearray.DeviceNDArray
-    """
-    v = cuda.local.array(3, numba.float64)
-    k = cuda.local.array(3, numba.float64)
-    for i in range(3):
-        v[i] = triangle[0, i] - triangle[1, i]
-        k[i] = triangle[0, i] - triangle[2, i]
-    _cuda_cross_product(v, k, normal)
-    _cuda_normalize_vector(normal)
-    return
-
-
-@cuda.jit(device=True)
 def _cuda_ray_triangle_intersection_check(triangle, r0, step):
     """Check if a ray defined by r0 and step intersects with a triangle defined
     by A, B, and C. The output is the distance in units of step length from r0
@@ -271,7 +271,6 @@ def _cuda_ray_triangle_intersection_check(triangle, r0, step):
     _cuda_cross_product(step, E_2, P)
     _cuda_cross_product(T, E_1, Q)
     det = _cuda_dot_product(P, E_1)
-    # if abs(det) > 1e-7:
     if det != 0:
         t = 1 / det * _cuda_dot_product(Q, E_2)
         u = 1 / det * _cuda_dot_product(P, T)
@@ -600,7 +599,7 @@ def _aabb_to_mesh(a, b):
 
 
 @cuda.jit(device=True)
-def _ll_subvoxel_overlap_1d(xs, x1, x2):
+def _ll_subvoxel_overlap(xs, x1, x2):
     """For an interval [x1, x2], return the index of the lower limit of the
     overlapping subvoxels whose borders are defined by the elements of xs."""
     xmin = min(x1, x2)
@@ -619,7 +618,7 @@ def _ll_subvoxel_overlap_1d(xs, x1, x2):
 
 
 @cuda.jit(device=True)
-def _ul_subvoxel_overlap_1d(xs, x1, x2):
+def _ul_subvoxel_overlap(xs, x1, x2):
     """For an interval [x1, x2], return the index of the upper limit of the
     overlapping subvoxels whose borders are defined by the elements of xs."""
     xmax = max(x1, x2)
@@ -638,7 +637,7 @@ def _ul_subvoxel_overlap_1d(xs, x1, x2):
 
 
 @cuda.jit(device=True)
-def ll_subvoxel_overlap_1d_periodic(xs, x1, x2):
+def ll_subvoxel_overlap_periodic(xs, x1, x2):
     """For an interval [x1, x2], return the index of the lower limit of the
     overlapping subvoxels whose borders are defined by the elements of xs. The
     subvoxel division continues outside the voxel."""
@@ -646,13 +645,13 @@ def ll_subvoxel_overlap_1d_periodic(xs, x1, x2):
     voxel_size = abs(xs[-1] - xs[0])
     n = math.floor(xmin / voxel_size)  # How many voxel widths to shift
     xmin_shifted = xmin - n * voxel_size
-    ll_shifted = ll_subvoxel_overlap_1d(xs, xmin_shifted, xmin_shifted)
+    ll_shifted = ll_subvoxel_overlap(xs, xmin_shifted, xmin_shifted)
     ll = ll_shifted + n * (len(xs) - 1)
     return ll
 
 
 @cuda.jit(device=True)
-def ul_subvoxel_overlap_1d_periodic(xs, x1, x2):
+def ul_subvoxel_overlap_periodic(xs, x1, x2):
     """For an interval [x1, x2], return the index of the upper limit of the
     overlapping subvoxels whose borders are defined by the elements of xs. The
     subvoxel division continues outside the voxel."""
@@ -660,7 +659,7 @@ def ul_subvoxel_overlap_1d_periodic(xs, x1, x2):
     voxel_size = abs(xs[-1] - xs[0])
     n = math.floor(xmax / voxel_size)  # How many voxel widths to shift
     xmax_shifted = xmax - n * voxel_size
-    ul_shifted = ul_subvoxel_overlap_1d(xs, xmax_shifted, xmax_shifted)
+    ul_shifted = ul_subvoxel_overlap(xs, xmax_shifted, xmax_shifted)
     ul = ul_shifted + n * (len(xs) - 1)
     return ul
 
@@ -800,6 +799,16 @@ def _cuda_step_ellipsoid(positions, g_x, g_y, g_z, phases, rng_states, t,
     return
 
 
+@cuda.jit(device=True)
+def _cuda_get_triangle(i, vertices, faces, triangle):
+    """Get the ith triangle from vertices and faces."""
+    for a in range(3):
+        for b in range(3):
+            triangle[a, b] = vertices[faces[i, a], b]
+    return
+
+
+
 @cuda.jit()
 def _cuda_step_mesh(positions, g_x, g_y, g_z, phases, rng_states, t, step_l, dt,
                     vertices, faces, xs, ys, zs, subvoxel_indices,
@@ -812,10 +821,10 @@ def _cuda_step_mesh(positions, g_x, g_y, g_z, phases, rng_states, t, step_l, dt,
 
     # Allocate memory
     step = cuda.local.array(3, numba.float64)
-    triangle = cuda.local.array((3, 3), numba.float64)
-    normal = cuda.local.array((3, 3), numba.float64)
     lls = cuda.local.array(3, numba.int64)
     uls = cuda.local.array(3, numba.int64)
+    triangle = cuda.local.array((3, 3), numba.float64) 
+    normal = cuda.local.array(3, numba.float64)
 
     # Get position and generate step
     r0 = positions[thread_id, :]
@@ -826,67 +835,45 @@ def _cuda_step_mesh(positions, g_x, g_y, g_z, phases, rng_states, t, step_l, dt,
     iter_idx = 0
     while check_intersection and step_l > 0 and iter_idx < max_iter:
         iter_idx += 1
-        distance = math.inf
+        min_d = math.inf
 
         # Find the relevant subvoxels for the step
-        lls[0] = _ll_subvoxel_overlap_1d(xs, r0[0], r0[0] + step[0] * step_l)
-        lls[1] = _ll_subvoxel_overlap_1d(ys, r0[1], r0[1] + step[1] * step_l)
-        lls[2] = _ll_subvoxel_overlap_1d(zs, r0[2], r0[2] + step[2] * step_l)
-        uls[0] = _ul_subvoxel_overlap_1d(xs, r0[0], r0[0] + step[0] * step_l)
-        uls[1] = _ul_subvoxel_overlap_1d(ys, r0[1], r0[1] + step[1] * step_l)
-        uls[2] = _ul_subvoxel_overlap_1d(zs, r0[2], r0[2] + step[2] * step_l)
+        lls[0] = _ll_subvoxel_overlap(xs, r0[0], r0[0] + step[0] * step_l)
+        lls[1] = _ll_subvoxel_overlap(ys, r0[1], r0[1] + step[1] * step_l)
+        lls[2] = _ll_subvoxel_overlap(zs, r0[2], r0[2] + step[2] * step_l)
+        uls[0] = _ul_subvoxel_overlap(xs, r0[0], r0[0] + step[0] * step_l)
+        uls[1] = _ul_subvoxel_overlap(ys, r0[1], r0[1] + step[1] * step_l)
+        uls[2] = _ul_subvoxel_overlap(zs, r0[2], r0[2] + step[2] * step_l)
 
         # Loop over subvoxels and fnd the closest triangle
         for x in range(lls[0], uls[0]):
             for y in range(lls[1], uls[1]):
                 for z in range(lls[2], uls[2]):
-                    i = int(x * n_sv[1] * n_sv[2] + y * n_sv[2] + z)
+                    sv = int(x * n_sv[1] * n_sv[2] + y * n_sv[2] + z)
 
                     # Loop over the triangles in this subvoxel
-                    for j in range(subvoxel_indices[i, 0],
-                                   subvoxel_indices[i, 1]):
-                        idx = faces[triangle_indices[j]]
-                        for a in range(3):
-                            for b in range(3):
-                                triangle[a, b] = vertices[idx[a], b]
+                    for i in range(subvoxel_indices[sv, 0],
+                                   subvoxel_indices[sv, 1]):
+                        _cuda_get_triangle(
+                            triangle_indices[i], vertices, faces, triangle)
                         d = _cuda_ray_triangle_intersection_check(
                             triangle, r0, step)
-                        if d > 0 and d < distance:
-                            closest_triangle = triangle
-                            distance = d
+                        if d > 0 and d < min_d:
+                            closest_triangle_index = triangle_indices[i]
+                            min_d = d * 1
 
         # Check if step intersects with the closest triangle
-        if distance < step_l:
-            step_l -= distance
-            A = closest_triangle[0, :]
-            B = closest_triangle[1, :]
-            C = closest_triangle[2, :]
-            normal = cuda.local.array(3, numba.float64)
-            normal[0] = ((B[1] - A[1]) * (C[2] - A[2]) -
-                         (B[2] - A[2]) * (C[1] - A[1]))
-            normal[1] = ((B[2] - A[2]) * (C[0] - A[0]) -
-                         (B[0] - A[0]) * (C[2] - A[2]))
-            normal[2] = ((B[0] - A[0]) * (C[1] - A[1]) -
-                         (B[1] - A[1]) * (C[0] - A[0]))
-            _cuda_normalize_vector(normal)
-            #_cuda_triangle_normal(closest_triangle, normal)
-            _cuda_reflection(r0, step, d, normal, epsilon)
+        if min_d < step_l:
+            step_l -= min_d
+            _cuda_get_triangle(
+                closest_triangle_index, vertices, faces, triangle)
+            _cuda_triangle_normal(triangle, normal)
+            _cuda_reflection(r0, step, min_d, normal, epsilon)
         else:
             check_intersection = False
 
     if iter_idx >= max_iter:
         iter_exc[thread_id] = True
-
-    """
-    for idx in faces:  # Loop over triangles
-        for i in range(3):
-            for j in range(3):
-                triangle[i, j] = vertices[idx[i], j]
-        d = _cuda_ray_triangle_intersection_check(triangle, r0, step)
-        if d > 0 and d < step_l:
-            step_l = 0
-    """
-    
     for i in range(3):
         positions[thread_id, i] = r0[i] + step[i] * step_l
     for m in range(g_x.shape[0]):
@@ -922,17 +909,17 @@ def _cuda_step_mesh(positions, g_x, g_y, g_z, phases, rng_states, t, step_l, dt,
         min_d = math.inf
         min_idx = 0
 
-        lls[0] = ll_subvoxel_overlap_1d_periodic(
+        lls[0] = ll_subvoxel_overlap_periodic(
             xs, r0[0], r0[0] + step[0] * step_l)
-        uls[0] = ul_subvoxel_overlap_1d_periodic(
+        uls[0] = ul_subvoxel_overlap_periodic(
             xs, r0[0], r0[0] + step[0] * step_l)
-        lls[1] = ll_subvoxel_overlap_1d_periodic(
+        lls[1] = ll_subvoxel_overlap_periodic(
             ys, r0[1], r0[1] + step[1] * step_l)
-        uls[1] = ul_subvoxel_overlap_1d_periodic(
+        uls[1] = ul_subvoxel_overlap_periodic(
             ys, r0[1], r0[1] + step[1] * step_l)
-        lls[2] = ll_subvoxel_overlap_1d_periodic(
+        lls[2] = ll_subvoxel_overlap_periodic(
             zs, r0[2], r0[2] + step[2] * step_l)
-        uls[2] = ul_subvoxel_overlap_1d_periodic(
+        uls[2] = ul_subvoxel_overlap_periodic(
             zs, r0[2], r0[2] + step[2] * step_l)
 
         for x in range(lls[0], uls[0]):  # Loop over relevant subvoxels

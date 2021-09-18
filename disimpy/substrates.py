@@ -23,6 +23,8 @@ class _Substrate:
             self.faces = kwargs['faces']
             self.voxel_size = kwargs['voxel_size']
             self.periodic = kwargs['periodic']
+            if self.periodic:
+                print('Periodic boundary conditions not supported yet')
             self.init_pos = kwargs['init_pos']
             self.n_sv = kwargs['n_sv']
             print('Dividing mesh into subvoxels')
@@ -186,11 +188,16 @@ def mesh(vertices, faces, padding=np.zeros(3), periodic=False,
         raise ValueError('Incorrect value (%s) for padding' % padding)
     if not isinstance(periodic, bool):
         raise ValueError('Incorrect value (%s) for periodic' % periodic)
-    if init_pos != 'uniform' and init_pos != 'intra' and init_pos != 'extra':
-        if (not isinstance(init_pos, np.ndarray) or init_pos.ndim != 2 or 
-            init_pos.shape[1] != 3 or not
-            np.issubdtype(init_pos.dtype, np.floating)):
+    if isinstance(init_pos, np.ndarray):
+        if (init_pos.ndim != 2 or init_pos.shape[1] != 3 or not
+                np.issubdtype(init_pos.dtype, np.floating)):
             raise ValueError('Incorrect value (%s) for init_pos' % init_pos)
+    elif isinstance(init_pos, str):
+        if (not (init_pos == 'uniform' or init_pos == 'intra' or
+                 init_pos == 'extra')):
+            raise ValueError('Incorrect value (%s) for init_pos' % init_pos)
+    else:
+        raise ValueError('Incorrect value (%s) for init_pos' % init_pos)
     if (not isinstance(n_sv, np.ndarray) or n_sv.shape != (3,) or
             not np.issubdtype(n_sv.dtype, np.integer)):
         raise ValueError(
@@ -275,10 +282,15 @@ def _triangle_box_overlap(triangle, box):
         [-h[0], h[1], h[2]], [h[0], -h[1], -h[2]],
         [h[0], -h[1], h[2]], [-h[0], h[1], -h[2]],
         [h[0], h[1], -h[2]], [-h[0], -h[1], h[2]]])
+    in_plane = False
     behind = np.zeros(8, dtype=numba.boolean)
     for i, point in enumerate(corners):
-        behind[i] = _dot_product(normal, v[0] - point) > 0
-    if np.all(behind) or np.all(~behind):
+        dp = _dot_product(normal, v[0] - point)
+        if dp == 0:
+            in_plane = True
+        else:
+            behind[i] = _dot_product(normal, v[0] - point) > 0
+    if not in_plane and (np.all(behind) or np.all(~behind)):
         return False
 
     # Test the triangle against the box
@@ -295,7 +307,7 @@ def _triangle_box_overlap(triangle, box):
 
 
 @numba.jit()
-def _interval_sv_overlap_1d(xs, x1, x2):
+def _interval_sv_overlap(xs, x1, x2):
     """Return the indices of subvoxels that overlap with interval [x1, x2].
 
     Parameters
@@ -386,7 +398,7 @@ def _box_subvoxel_overlap(box, xs, ys, zs):
     """
     subvoxels = np.zeros((3, 2), dtype=np.int32)
     for i, a in enumerate([xs, ys, zs]):
-        subvoxels[i] = _interval_sv_overlap_1d(a, box[0, i], box[1, i])
+        subvoxels[i] = _interval_sv_overlap(a, box[0, i], box[1, i])
     return subvoxels
 
 

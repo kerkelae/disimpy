@@ -8,8 +8,8 @@ import numpy as np
 import numba
 from numba import cuda
 from numba.cuda.random import (create_xoroshiro128p_states,
-                               xoroshiro128p_normal_float32,
-                               xoroshiro128p_uniform_float32)
+                               xoroshiro128p_normal_float64,
+                               xoroshiro128p_uniform_float64)
 from warnings import warn
 
 from . import utils, substrates
@@ -79,8 +79,8 @@ def _cuda_triangle_normal(triangle, normal):
     triangle : numba.cuda.cudadrv.devicearray.DeviceNDArray
     normal : numba.cuda.cudadrv.devicearray.DeviceNDArray
     """
-    v = cuda.local.array(3, numba.float32)
-    k = cuda.local.array(3, numba.float32)
+    v = cuda.local.array(3, numba.float64)
+    k = cuda.local.array(3, numba.float64)
     for i in range(3):
         v[i] = triangle[0, i] - triangle[1, i]
         k[i] = triangle[0, i] - triangle[2, i]
@@ -121,7 +121,7 @@ def _cuda_random_step(step, rng_states, thread_id):
     None
     """
     for i in range(3):
-        step[i] = xoroshiro128p_normal_float32(rng_states, thread_id)
+        step[i] = xoroshiro128p_normal_float64(rng_states, thread_id)
     _cuda_normalize_vector(step)
     return
 
@@ -139,7 +139,7 @@ def _cuda_mat_mul(R, v):
     -------
     None
     """
-    rotated_v = cuda.local.array(3, numba.float32)
+    rotated_v = cuda.local.array(3, numba.float64)
     rotated_v[0] = R[0, 0] * v[0] + R[0, 1] * v[1] + R[0, 2] * v[2]
     rotated_v[1] = R[1, 0] * v[0] + R[1, 1] * v[1] + R[1, 2] * v[2]
     rotated_v[2] = R[2, 0] * v[0] + R[2, 1] * v[1] + R[2, 2] * v[2]
@@ -391,14 +391,14 @@ def _cuda_fill_mesh(points, rng_states, vertices, faces, voxel_size, intra):
     thread_id = cuda.grid(1)
     if thread_id >= points.shape[0] or points[thread_id, 0] != math.inf:
         return
-    point = cuda.local.array(3, numba.float32)
+    point = cuda.local.array(3, numba.float64)
     for i in range(3):
-        point[i] = xoroshiro128p_uniform_float32(
+        point[i] = xoroshiro128p_uniform_float64(
             rng_states, thread_id) * voxel_size[i]
-    ray = cuda.local.array(3, numba.float32)
+    ray = cuda.local.array(3, numba.float64)
     _cuda_random_step(ray, rng_states, thread_id)
     intersections = 0
-    triangle = cuda.local.array((3, 3), numba.float32)
+    triangle = cuda.local.array((3, 3), numba.float64)
     for idx in faces:  # Loop over triangles
         for i in range(3):
             for j in range(3):
@@ -437,7 +437,7 @@ def _fill_mesh(n_points, substrate, intra, seed=123, cuda_bs=128):
     gs = int(math.ceil(float(n_points) / bs))
     stream = cuda.stream()
     rng_states = create_xoroshiro128p_states(gs * bs, seed=seed, stream=stream)
-    points = np.ones((n_points, 3)).astype(np.float32) * math.inf
+    points = np.ones((n_points, 3)).astype(np.float64) * math.inf
     d_points = cuda.to_device(points, stream=stream)
     if substrate.periodic:
         d_vertices = cuda.to_device(substrate.vertices, stream=stream)
@@ -553,7 +553,7 @@ def _cuda_step_free(positions, g_x, g_y, g_z, phases, rng_states, t, step_l,
     thread_id = cuda.grid(1)
     if thread_id >= positions.shape[0]:
         return
-    step = cuda.local.array(3, numba.float32)
+    step = cuda.local.array(3, numba.float64)
     _cuda_random_step(step, rng_states, thread_id)
     for i in range(3):
         positions[thread_id, i] = positions[thread_id, i] + step[i] * step_l
@@ -572,7 +572,7 @@ def _cuda_step_sphere(positions, g_x, g_y, g_z, phases, rng_states, t, step_l,
     thread_id = cuda.grid(1)
     if thread_id >= positions.shape[0]:
         return
-    step = cuda.local.array(3, numba.float32)
+    step = cuda.local.array(3, numba.float64)
     _cuda_random_step(step, rng_states, thread_id)
     r0 = positions[thread_id, :]
     iter_idx = 0
@@ -581,7 +581,7 @@ def _cuda_step_sphere(positions, g_x, g_y, g_z, phases, rng_states, t, step_l,
         iter_idx += 1
         d = _cuda_line_sphere_intersection(r0, step, radius)
         if d > 0 and d < step_l:
-            normal = cuda.local.array(3, numba.float32)
+            normal = cuda.local.array(3, numba.float64)
             for i in range(3):
                 normal[i] = -(r0[i] + d * step[i])
             _cuda_normalize_vector(normal)
@@ -608,7 +608,7 @@ def _cuda_step_cylinder(positions, g_x, g_y, g_z, phases, rng_states, t, step_l,
     thread_id = cuda.grid(1)
     if thread_id >= positions.shape[0]:
         return
-    step = cuda.local.array(3, numba.float32)
+    step = cuda.local.array(3, numba.float64)
     _cuda_random_step(step, rng_states, thread_id)
     r0 = positions[thread_id, :]
     _cuda_mat_mul(R, r0)  # Move to cylinder frame
@@ -618,7 +618,7 @@ def _cuda_step_cylinder(positions, g_x, g_y, g_z, phases, rng_states, t, step_l,
         iter_idx += 1
         d = _cuda_line_circle_intersection(r0[1:3], step[1:3], radius)
         if d > 0 and d < step_l:
-            normal = cuda.local.array(3, numba.float32)
+            normal = cuda.local.array(3, numba.float64)
             normal[0] = 0
             for i in range(1, 3):
                 normal[i] = -(r0[i] + d * step[i])
@@ -649,7 +649,7 @@ def _cuda_step_ellipsoid(positions, g_x, g_y, g_z, phases, rng_states, t,
     thread_id = cuda.grid(1)
     if thread_id >= positions.shape[0]:
         return
-    step = cuda.local.array(3, numba.float32)
+    step = cuda.local.array(3, numba.float64)
     _cuda_random_step(step, rng_states, thread_id)
     r0 = positions[thread_id, :]
     _cuda_mat_mul(R, r0)  # Move to ellipsoid frame
@@ -659,7 +659,7 @@ def _cuda_step_ellipsoid(positions, g_x, g_y, g_z, phases, rng_states, t,
         iter_idx += 1
         d = _cuda_line_ellipsoid_intersection(r0, step, semiaxes)
         if d > 0 and d < step_l:
-            normal = cuda.local.array(3, numba.float32)
+            normal = cuda.local.array(3, numba.float64)
             for i in range(3):
                 normal[i] = -(r0[i] + d * step[i]) / semiaxes[i]**2
             _cuda_normalize_vector(normal)
@@ -692,11 +692,11 @@ def _cuda_step_mesh(positions, g_x, g_y, g_z, phases, rng_states, t, step_l, dt,
         return
 
     # Allocate memory
-    step = cuda.local.array(3, numba.float32)
+    step = cuda.local.array(3, numba.float64)
     lls = cuda.local.array(3, numba.int64)
     uls = cuda.local.array(3, numba.int64)
-    triangle = cuda.local.array((3, 3), numba.float32)
-    normal = cuda.local.array(3, numba.float32)
+    triangle = cuda.local.array((3, 3), numba.float64)
+    normal = cuda.local.array(3, numba.float64)
 
     # Get position and generate step
     r0 = positions[thread_id, :]

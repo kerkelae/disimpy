@@ -239,11 +239,11 @@ def _cuda_ray_triangle_intersection_check(triangle, r0, step):
     A = triangle[0]
     B = triangle[1]
     C = triangle[2]
-    T = cuda.local.array(3, numba.float32)
-    E_1 = cuda.local.array(3, numba.float32)
-    E_2 = cuda.local.array(3, numba.float32)
-    P = cuda.local.array(3, numba.float32)
-    Q = cuda.local.array(3, numba.float32)
+    T = cuda.local.array(3, numba.float64)
+    E_1 = cuda.local.array(3, numba.float64)
+    E_2 = cuda.local.array(3, numba.float64)
+    P = cuda.local.array(3, numba.float64)
+    Q = cuda.local.array(3, numba.float64)
     for i in range(3):
         T[i] = r0[i] - A[i]
         E_1[i] = B[i] - A[i]
@@ -281,8 +281,8 @@ def _cuda_reflection(r0, step, d, normal, epsilon):
     -------
     float
     """
-    intersection = cuda.local.array(3, numba.float32)
-    v = cuda.local.array(3, numba.float32)
+    intersection = cuda.local.array(3, numba.float64)
+    v = cuda.local.array(3, numba.float64)
     for i in range(3):
         intersection[i] = r0[i] + d * step[i]
         v[i] = intersection[i] - r0[i]

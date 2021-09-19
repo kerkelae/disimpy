@@ -90,6 +90,23 @@ def _cuda_triangle_normal(triangle, normal):
 
 
 @cuda.jit(device=True)
+def _cuda_get_triangle(i, vertices, faces, triangle):
+    """Get the ith triangle from vertices and faces arrays.
+
+    Parameters
+    ----------
+    i : int
+    vertices : numba.cuda.cudadrv.devicearray.DeviceNDArray
+    faces : numba.cuda.cudadrv.devicearray.DeviceNDArray
+    triangle : numba.cuda.cudadrv.devicearray.DeviceNDArray
+    """
+    for a in range(3):
+        for b in range(3):
+            triangle[a, b] = vertices[faces[i, a], b]
+    return
+
+
+@cuda.jit(device=True)
 def _cuda_random_step(step, rng_states, thread_id):
     """Generate a random step from a uniform distribution over a sphere.
 
@@ -199,43 +216,6 @@ def _cuda_line_ellipsoid_intersection(r0, step, semiaxes):
     return d
 
 
-@numba.jit(nopython=True)
-def _cuda_reflection(r0, step, d, normal, epsilon):
-    """Calculate reflection and update r0 and step. Epsilon is the amount by
-    which the new position differs from the reflection point.
-
-    Parameters
-    ----------
-    r0 : numba.cuda.cudadrv.devicearray.DeviceNDArray
-    step : numba.cuda.cudadrv.devicearray.DeviceNDArray
-    d : float
-    normal : numba.cuda.cudadrv.devicearray.DeviceNDArray
-    semiaxes : numba.cuda.cudadrv.devicearray.DeviceNDArray
-    epsilon : float
-
-    Returns
-    -------
-    float
-    """
-    intersection = cuda.local.array(3, numba.float64)
-    v = cuda.local.array(3, numba.float64)
-    for i in range(3):
-        intersection[i] = r0[i] + d * step[i]
-        v[i] = intersection[i] - r0[i]
-    dp = _cuda_dot_product(v, normal)
-    if dp > 0:  # Make sure the normal vector points against the step
-        for i in range(3):
-            normal[i] *= -1
-        dp = _cuda_dot_product(v, normal)
-    for i in range(3):
-        step[i] = (
-            (v[i] - 2 * dp * normal[i] + intersection[i]) - intersection[i])
-    _cuda_normalize_vector(step)
-    for i in range(3):  # Move walker slightly away from the surface
-        r0[i] = intersection[i] + epsilon * normal[i]
-    return
-
-
 @cuda.jit(device=True)
 def _cuda_ray_triangle_intersection_check(triangle, r0, step):
     """Check if a ray defined by r0 and step intersects with a triangle defined
@@ -283,139 +263,41 @@ def _cuda_ray_triangle_intersection_check(triangle, r0, step):
         return np.nan
 
 
-@numba.jit()
-def _interval_sv_overlap_1d(xs, x1, x2):
-    """Return the indices of subvoxels that overlap with interval [x1, x2].
+@numba.jit(nopython=True)
+def _cuda_reflection(r0, step, d, normal, epsilon):
+    """Calculate reflection and update r0 and step. Epsilon is the amount by
+    which the new position differs from the reflection point.
 
     Parameters
     ----------
-    xs : numpy.ndarray
-        Array of subvoxel boundaries.
-    x1 : float
-        Start/end point of the interval.
-    x2 : float
-        End/start point of the interval.
+    r0 : numba.cuda.cudadrv.devicearray.DeviceNDArray
+    step : numba.cuda.cudadrv.devicearray.DeviceNDArray
+    d : float
+    normal : numba.cuda.cudadrv.devicearray.DeviceNDArray
+    semiaxes : numba.cuda.cudadrv.devicearray.DeviceNDArray
+    epsilon : float
 
     Returns
     -------
-    ll : float
-        Lowest subvoxel index of the overlapping subvoxels.
-    ul : float
-        Highest subvoxel index of the overlapping subvoxels.
+    float
     """
-    xmin = min(x1, x2)
-    xmax = max(x1, x2)
-    if xmin <= xs[0]:
-        ll = 0
-    elif xmin >= xs[-1]:
-        ll = len(xs) - 1
-    else:
-        ll = 0
-        for i, x in enumerate(xs):
-            if x > xmin:
-                ll = i - 1
-                break
-    if xmax >= xs[-1]:
-        ul = len(xs) - 1
-    elif xmax <= xs[0]:
-        ul = 0
-    else:
-        ul = len(xs) - 1
-        for i, x in enumerate(xs):
-            if not x < xmax:
-                ul = i
-                break
-    if ll != ul:
-        return ll, ul
-    else:
-        if ll != len(xs) - 1:
-            return ll, ul + 1
-        else:
-            return ll - 1, ul
-
-
-def _mesh_space_subdivision(triangles, voxel_size, n_sv):
-    """Divide a triangular mesh into into subvoxels and return arrays for
-    finding the relevant triangles of given a subvoxel.
-
-    Parameters
-    ----------
-    triangles : numpy.ndarray
-        Triangular mesh represented by an array of shape (number of triangles,
-        3, 3) where the second dimension indices correspond to different
-        triangle points and the third dimension representes the Cartesian
-        coordinates.
-    voxel_size : numpy.ndarray
-        Floating-point array of size (3,) defining the size of the simulated
-        voxel.
-    n_sv : numpy.ndarray
-        Integer array of size (3,) defining the number of subvoxels along each
-        axis.
-
-    Returns
-    -------
-    xs : numpy.ndarray
-        Floating-point array of shape (n_sv[0],) defining the subvoxel
-        boundaries along the x-axis.
-    ys : numpy.ndarray
-        Floating-point array of shape (n_sv[1],) defining the subvoxel
-        boundaries along the y-axis.
-    zs : numpy.ndarray
-        Floating-point array of shape (n_sv[2],) defining the subvoxel
-        boundaries along the z-axis.
-    triangle_indices : numpy.ndarray
-        One-dimensional integer array ontaining the relevant triangle indices
-        for all subvoxels.
-    subvoxel_indices : numpy.ndarray
-        Two-dimensional integer array that enables the relevant triangles to a
-        given subvoxel to be located in the array triangle_indices. The
-        relevant triangles to subvoxel i are the elements of tri_indices from
-        subvoxel_indices[i, 0] to subvoxel_indices[i, 1].
-
-    Notes
-    -----
-    This implementation finds the relevant triangles by comparing the axis
-    aligned bounding boxes of the triangle to the subvoxel grid. The output is
-    two arrays so that it can be passed onto CUDA kernels which do not support
-    3D arrays or Python data structures like lists of lists or dictionaries.
-    """
-
-    # Define the subvoxel boundaries
-    n_sv = np.array([n_sv, n_sv, n_sv])  # TEMPORARILY
-    xs = np.linspace(0, voxel_size[0], n_sv[0] + 1)
-    ys = np.linspace(0, voxel_size[1], n_sv[1] + 1)
-    zs = np.linspace(0, voxel_size[2], n_sv[2] + 1)
-    relevant_triangles = [[] for _ in range(np.product(n_sv))]
-
-    # Loop over the triangles to assign them to subvoxels
-    for i, triangle in enumerate(triangles):
-        xmin = np.min(triangle[:, 0])
-        xmax = np.max(triangle[:, 0])
-        ymin = np.min(triangle[:, 1])
-        ymax = np.max(triangle[:, 1])
-        zmin = np.min(triangle[:, 2])
-        zmax = np.max(triangle[:, 2])
-        x_ll, x_ul = _interval_sv_overlap_1d(xs, xmin, xmax)
-        y_ll, y_ul = _interval_sv_overlap_1d(ys, ymin, ymax)
-        z_ll, z_ul = _interval_sv_overlap_1d(zs, zmin, zmax)
-        for x in range(x_ll, x_ul):
-            for y in range(y_ll, y_ul):
-                for z in range(z_ll, z_ul):
-                    subvoxel = x * n_sv[1] * n_sv[2] + y * n_sv[1] + z
-                    relevant_triangles[subvoxel].append(i)
-
-    # Make the final arrays
-    triangle_indices = []
-    subvoxel_indices = np.zeros((len(relevant_triangles), 2))
-    counter = 0
-    for i, l in enumerate(relevant_triangles):
-        triangle_indices += l
-        subvoxel_indices[i, 0] = counter
-        subvoxel_indices[i, 1] = counter + len(l)
-        counter += len(l)
-    triangle_indices = np.array(triangle_indices).astype(int)
-    subvoxel_indices = subvoxel_indices.astype(int)
-    return xs, ys, zs, triangle_indices, subvoxel_indices
+    intersection = cuda.local.array(3, numba.float64)
+    v = cuda.local.array(3, numba.float64)
+    for i in range(3):
+        intersection[i] = r0[i] + d * step[i]
+        v[i] = intersection[i] - r0[i]
+    dp = _cuda_dot_product(v, normal)
+    if dp > 0:  # Make sure the normal vector points against the step
+        for i in range(3):
+            normal[i] *= -1
+        dp = _cuda_dot_product(v, normal)
+    for i in range(3):
+        step[i] = (
+            (v[i] - 2 * dp * normal[i] + intersection[i]) - intersection[i])
+    _cuda_normalize_vector(step)
+    for i in range(3):  # Move walker slightly away from the surface
+        r0[i] = intersection[i] + epsilon * normal[i]
+    return
 
 
 @numba.jit(nopython=True)
@@ -637,7 +519,7 @@ def _ul_subvoxel_overlap(xs, x1, x2):
 
 
 @cuda.jit(device=True)
-def ll_subvoxel_overlap_periodic(xs, x1, x2):
+def _ll_subvoxel_overlap_periodic(xs, x1, x2):
     """For an interval [x1, x2], return the index of the lower limit of the
     overlapping subvoxels whose borders are defined by the elements of xs. The
     subvoxel division continues outside the voxel."""
@@ -651,7 +533,7 @@ def ll_subvoxel_overlap_periodic(xs, x1, x2):
 
 
 @cuda.jit(device=True)
-def ul_subvoxel_overlap_periodic(xs, x1, x2):
+def _ul_subvoxel_overlap_periodic(xs, x1, x2):
     """For an interval [x1, x2], return the index of the upper limit of the
     overlapping subvoxels whose borders are defined by the elements of xs. The
     subvoxel division continues outside the voxel."""
@@ -799,16 +681,6 @@ def _cuda_step_ellipsoid(positions, g_x, g_y, g_z, phases, rng_states, t,
     return
 
 
-@cuda.jit(device=True)
-def _cuda_get_triangle(i, vertices, faces, triangle):
-    """Get the ith triangle from vertices and faces."""
-    for a in range(3):
-        for b in range(3):
-            triangle[a, b] = vertices[faces[i, a], b]
-    return
-
-
-
 @cuda.jit()
 def _cuda_step_mesh(positions, g_x, g_y, g_z, phases, rng_states, t, step_l, dt,
                     vertices, faces, xs, ys, zs, subvoxel_indices,
@@ -823,7 +695,7 @@ def _cuda_step_mesh(positions, g_x, g_y, g_z, phases, rng_states, t, step_l, dt,
     step = cuda.local.array(3, numba.float64)
     lls = cuda.local.array(3, numba.int64)
     uls = cuda.local.array(3, numba.int64)
-    triangle = cuda.local.array((3, 3), numba.float64) 
+    triangle = cuda.local.array((3, 3), numba.float64)
     normal = cuda.local.array(3, numba.float64)
 
     # Get position and generate step
@@ -882,118 +754,6 @@ def _cuda_step_mesh(positions, g_x, g_y, g_z, phases, rng_states, t, step_l, dt,
                                   + (g_y[m, t] * positions[thread_id, 1])
                                   + (g_z[m, t] * positions[thread_id, 2])))
     return
-
-
-"""
-@cuda.jit()
-def _cuda_step_mesh(positions, g_x, g_y, g_z, phases, rng_states, t, step_l, dt,
-                    triangles, xs, ys, zs, subvoxel_indices, triangle_indices,
-                    iter_exc, max_iter, periodic, n_sv, epsilon):
-    thread_id = cuda.grid(1)
-    if thread_id >= positions.shape[0]:
-        return
-    step = cuda.local.array(3, numba.float64)
-    _cuda_random_step(step, rng_states, thread_id)
-    r0 = cuda.local.array(3, numba.float64)
-    r0 = positions[thread_id, :]
-    iter_idx = 0
-    prev_tri_idx = -1
-    check_intersection = True
-    shifts = cuda.local.array(3, numba.float64)
-    temp_shifts = cuda.local.array(3, numba.float64)
-    temp_r0 = cuda.local.array(3, numba.float64)
-    lls = cuda.local.array(3, numba.float64)
-    uls = cuda.local.array(3, numba.float64)
-    while check_intersection and step_l > 0 and iter_idx < max_iter:
-        iter_idx += 1
-        min_d = math.inf
-        min_idx = 0
-
-        lls[0] = ll_subvoxel_overlap_periodic(
-            xs, r0[0], r0[0] + step[0] * step_l)
-        uls[0] = ul_subvoxel_overlap_periodic(
-            xs, r0[0], r0[0] + step[0] * step_l)
-        lls[1] = ll_subvoxel_overlap_periodic(
-            ys, r0[1], r0[1] + step[1] * step_l)
-        uls[1] = ul_subvoxel_overlap_periodic(
-            ys, r0[1], r0[1] + step[1] * step_l)
-        lls[2] = ll_subvoxel_overlap_periodic(
-            zs, r0[2], r0[2] + step[2] * step_l)
-        uls[2] = ul_subvoxel_overlap_periodic(
-            zs, r0[2], r0[2] + step[2] * step_l)
-
-        for x in range(lls[0], uls[0]):  # Loop over relevant subvoxels
-            if x < 0 or x > n_sv - 1:
-                shift_n = math.floor(x / n_sv)
-                x -= shift_n * n_sv
-                temp_shifts[0] = shift_n * xs[-1]
-            else:
-                temp_shifts[0] = 0
-            for y in range(lls[1], uls[1]):
-                if y < 0 or y > n_sv - 1:
-                    shift_n = math.floor(y / n_sv)
-                    y -= shift_n * n_sv
-                    temp_shifts[1] = shift_n * ys[-1]
-                else:
-                    temp_shifts[1] = 0
-                for z in range(lls[2], uls[2]):
-                    if z < 0 or z > n_sv - 1:
-                        shift_n = math.floor(z / n_sv)
-                        z -= shift_n * n_sv
-                        temp_shifts[2] = shift_n * zs[-1]
-                    else:
-                        temp_shifts[2] = 0
-                    sv_idx = int(x * n_sv**2 + y * n_sv + z)
-                    for i in range(3):  # Shift walker
-                        temp_r0[i] = r0[i] - temp_shifts[i]
-                    # Loop over relevant triangles
-                    for i in range(subvoxel_indices[sv_idx, 0],
-                                   subvoxel_indices[sv_idx, 1]):
-                        tri_idx = triangle_indices[i] * 9
-                        if tri_idx != prev_tri_idx:
-                            A = triangles[tri_idx:tri_idx + 3]
-                            B = triangles[tri_idx + 3:tri_idx + 6]
-                            C = triangles[tri_idx + 6:tri_idx + 9]
-                            d = _cuda_ray_triangle_intersection_check(
-                                A, B, C, temp_r0, step)
-                            if d > 0 and d < min_d:
-                                min_d = d
-                                min_idx = tri_idx
-                                for j in range(3):
-                                    shifts[j] = temp_shifts[j]
-        if min_d < step_l:  # Step intersects with closest triangle
-            A = triangles[min_idx:min_idx + 3]
-            B = triangles[min_idx + 3:min_idx + 6]
-            C = triangles[min_idx + 6:min_idx + 9]
-            normal = cuda.local.array(3, numba.float64)
-            normal[0] = ((B[1] - A[1]) * (C[2] - A[2]) -
-                         (B[2] - A[2]) * (C[1] - A[1]))
-            normal[1] = ((B[2] - A[2]) * (C[0] - A[0]) -
-                         (B[0] - A[0]) * (C[2] - A[2]))
-            normal[2] = ((B[0] - A[0]) * (C[1] - A[1]) -
-                         (B[1] - A[1]) * (C[0] - A[0]))
-            _cuda_normalize_vector(normal)
-            for i in range(3):  # Shift walker to voxel
-                r0[i] -= shifts[i]
-            _cuda_reflection(r0, step, min_d, normal, epsilon)
-            for i in range(3):  # Shift walker back
-                r0[i] += shifts[i]
-            step_l -= min_d + epsilon
-            prev_tri_idx = min_idx
-        else:
-            check_intersection = False
-
-    if iter_idx >= max_iter:
-        iter_exc[thread_id] = True
-    for i in range(3):
-        positions[thread_id, i] = r0[i] + step[i] * step_l
-    for m in range(g_x.shape[0]):
-        phases[m, thread_id] += (GAMMA * dt *
-                                 ((g_x[m, t] * positions[thread_id, 0])
-                                  + (g_y[m, t] * positions[thread_id, 1])
-                                  + (g_z[m, t] * positions[thread_id, 2])))
-    return
-"""
 
 
 def add_noise_to_data(data, sigma, seed=None):

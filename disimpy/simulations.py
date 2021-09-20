@@ -705,6 +705,7 @@ def _cuda_step_mesh(positions, g_x, g_y, g_z, phases, rng_states, t, step_l, dt,
     # Check for intersection, reflect step, and repeat until no intersection
     check_intersection = True
     iter_idx = 0
+    #prev_triangle_idx = -1
     while check_intersection and step_l > 0 and iter_idx < max_iter:
         iter_idx += 1
         min_d = math.inf
@@ -726,6 +727,7 @@ def _cuda_step_mesh(positions, g_x, g_y, g_z, phases, rng_states, t, step_l, dt,
                     # Loop over the triangles in this subvoxel
                     for i in range(subvoxel_indices[sv, 0],
                                    subvoxel_indices[sv, 1]):
+                        #if triangle_indices[i] != prev_triangle_index:
                         _cuda_get_triangle(
                             triangle_indices[i], vertices, faces, triangle)
                         d = _cuda_ray_triangle_intersection_check(
@@ -741,6 +743,7 @@ def _cuda_step_mesh(positions, g_x, g_y, g_z, phases, rng_states, t, step_l, dt,
                 closest_triangle_index, vertices, faces, triangle)
             _cuda_triangle_normal(triangle, normal)
             _cuda_reflection(r0, step, min_d, normal, epsilon)
+            #prev_triangle_index = closest_triangle_index
         else:
             check_intersection = False
 
@@ -791,7 +794,7 @@ def _write_traj(traj, mode, positions):
 
 def simulation(n_walkers, diffusivity, gradient, dt, substrate, seed=123,
                traj=None, final_pos=False, all_signals=False,
-               quiet=False, cuda_bs=128, max_iter=int(1e3), epsilon=1e-10):
+               quiet=False, cuda_bs=128, max_iter=int(1e3), epsilon=1e-13):
     """Simulate a diffusion-weighted MR experiment and generate signal. For a
     detailed tutorial, please see
     https://disimpy.readthedocs.io/en/latest/tutorial.html.

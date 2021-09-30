@@ -37,9 +37,7 @@ def test_cylinder():
         ValueError, substrates.cylinder, radius=-5e-6, orientation=orientation
     )
     radius = 5e-6
-    npt.assert_raises(
-        ValueError, substrates.cylinder, radius=radius, orientation="o"
-    )
+    npt.assert_raises(ValueError, substrates.cylinder, radius=radius, orientation="o")
     npt.assert_raises(
         ValueError, substrates.cylinder, radius=radius, orientation=np.arange(4)
     )
@@ -52,9 +50,7 @@ def test_cylinder():
     substrate = substrates.cylinder(radius, orientation)
     npt.assert_equal(isinstance(substrate, substrates._Substrate), True)
     npt.assert_equal(substrate.radius, radius)
-    npt.assert_equal(
-        substrate.orientation, orientation / np.linalg.norm(orientation)
-    )
+    npt.assert_equal(substrate.orientation, orientation / np.linalg.norm(orientation))
     return
 
 
@@ -62,12 +58,8 @@ def test_ellipsoid():
     npt.assert_raises(ValueError, substrates.ellipsoid, semiaxes="s")
     npt.assert_raises(ValueError, substrates.ellipsoid, semiaxes=np.arange(4))
     semiaxes = np.array([5e-6, 1e-6, 10e-6])
-    npt.assert_raises(
-        ValueError, substrates.ellipsoid, semiaxes=semiaxes, R="R"
-    )
-    npt.assert_raises(
-        ValueError, substrates.ellipsoid, semiaxes=semiaxes, R=np.eye(4)
-    )
+    npt.assert_raises(ValueError, substrates.ellipsoid, semiaxes=semiaxes, R="R")
+    npt.assert_raises(ValueError, substrates.ellipsoid, semiaxes=semiaxes, R=np.eye(4))
     npt.assert_raises(
         ValueError, substrates.ellipsoid, semiaxes=semiaxes, R=np.zeros((3, 3))
     )
@@ -117,10 +109,7 @@ def test__triangle_box_overlap():
         ]
     )
     box = np.array(
-        [
-            [0.33109806, 0.16637023, 0.91545459],
-            [0.79806038, 0.83915475, 0.38118002],
-        ]
+        [[0.33109806, 0.16637023, 0.91545459], [0.79806038, 0.83915475, 0.38118002],]
     )
     npt.assert_equal(substrates._triangle_box_overlap(triangle, box), True)
     return
@@ -171,9 +160,7 @@ def test__box_subvoxel_overlap():
     zs = np.arange(21)
     box = np.array([[2.5, 5.0, 2.2], [9.2, 9.5, 20]])
     subvoxels = np.array([[2, 5], [5, 10], [2, 20]])
-    npt.assert_equal(
-        substrates._box_subvoxel_overlap(box, xs, ys, zs), subvoxels
-    )
+    npt.assert_equal(substrates._box_subvoxel_overlap(box, xs, ys, zs), subvoxels)
     return
 
 
@@ -190,9 +177,7 @@ def manual_test__mesh_space_subdivision(
 ):
     """Useful function for manually visualizing subvoxel division."""
     mesh_path = os.path.join(
-        os.path.dirname(substrates.__file__),
-        "tests",
-        "cylinder_mesh_closed.pkl",
+        os.path.dirname(substrates.__file__), "tests", "cylinder_mesh_closed.pkl",
     )
     mesh_path = os.path.join(
         os.path.dirname(substrates.__file__), "tests", "fibre_mesh.pkl"
@@ -263,7 +248,5 @@ def test__aabb_to_mesh():
             [6, 4, 3],
         ]
     )
-    npt.assert_equal(
-        substrates._aabb_to_mesh(box[0], box[1]), (vertices, faces)
-    )
+    npt.assert_equal(substrates._aabb_to_mesh(box[0], box[1]), (vertices, faces))
     return

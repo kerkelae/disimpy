@@ -10,28 +10,34 @@ class _Substrate:
 
     def __init__(self, substrate_type, **kwargs):
         self.type = substrate_type
-        if self.type == 'sphere':
-            self.radius = kwargs['radius']
-        elif self.type == 'cylinder':
-            self.radius = kwargs['radius']
-            self.orientation = kwargs['orientation']
-        elif self.type == 'ellipsoid':
-            self.semiaxes = kwargs['semiaxes']
-            self.R = kwargs['R']
-        elif self.type == 'mesh':
-            self.vertices = kwargs['vertices']
-            self.faces = kwargs['faces']
-            self.voxel_size = kwargs['voxel_size']
-            self.periodic = kwargs['periodic']
+        if self.type == "sphere":
+            self.radius = kwargs["radius"]
+        elif self.type == "cylinder":
+            self.radius = kwargs["radius"]
+            self.orientation = kwargs["orientation"]
+        elif self.type == "ellipsoid":
+            self.semiaxes = kwargs["semiaxes"]
+            self.R = kwargs["R"]
+        elif self.type == "mesh":
+            self.vertices = kwargs["vertices"]
+            self.faces = kwargs["faces"]
+            self.voxel_size = kwargs["voxel_size"]
+            self.periodic = kwargs["periodic"]
             if self.periodic:
-                print('Periodic boundary conditions not supported yet')
-            self.init_pos = kwargs['init_pos']
-            self.n_sv = kwargs['n_sv']
-            print('Dividing mesh into subvoxels')
-            (self.xs, self.ys, self.zs, self.triangle_indices,
-             self.subvoxel_indices) = _mesh_space_subdivision(
-                self.vertices, self.faces, self.voxel_size, self.n_sv)
-            print('Finished dividng mesh into subvoxels')
+                print("Periodic boundary conditions not supported yet")
+            self.init_pos = kwargs["init_pos"]
+            self.n_sv = kwargs["n_sv"]
+            print("Dividing mesh into subvoxels")
+            (
+                self.xs,
+                self.ys,
+                self.zs,
+                self.triangle_indices,
+                self.subvoxel_indices,
+            ) = _mesh_space_subdivision(
+                self.vertices, self.faces, self.voxel_size, self.n_sv
+            )
+            print("Finished dividng mesh into subvoxels")
 
 
 def free():
@@ -41,7 +47,7 @@ def free():
     -------
     substrate : disimpy.substrates._Substrate
     """
-    substrate = _Substrate('free')
+    substrate = _Substrate("free")
     return substrate
 
 
@@ -59,9 +65,8 @@ def sphere(radius):
     substrate : disimpy.substrates._Substrate
     """
     if not isinstance(radius, float) or radius <= 0:
-        raise ValueError(
-            'Incorrect value (%s) for radius' % radius)
-    substrate = _Substrate('sphere', radius=radius)
+        raise ValueError("Incorrect value (%s) for radius" % radius)
+    substrate = _Substrate("sphere", radius=radius)
     return substrate
 
 
@@ -83,14 +88,15 @@ def cylinder(radius, orientation):
         Substrate object.
     """
     if not isinstance(radius, float) or radius <= 0:
-        raise ValueError(
-            'Incorrect value (%s) for radius' % radius)
-    if (not isinstance(orientation, np.ndarray) or orientation.shape != (3,) or
-            not np.issubdtype(orientation.dtype, np.floating)):
-        raise ValueError(
-            'Incorrect value (%s) for orientation' % orientation)
+        raise ValueError("Incorrect value (%s) for radius" % radius)
+    if (
+        not isinstance(orientation, np.ndarray)
+        or orientation.shape != (3,)
+        or not np.issubdtype(orientation.dtype, np.floating)
+    ):
+        raise ValueError("Incorrect value (%s) for orientation" % orientation)
     orientation = orientation / np.linalg.norm(orientation)
-    substrate = _Substrate('cylinder', radius=radius, orientation=orientation)
+    substrate = _Substrate("cylinder", radius=radius, orientation=orientation)
     return substrate
 
 
@@ -112,25 +118,32 @@ def ellipsoid(semiaxes, R=np.eye(3)):
     substrate : disimpy.substrates._Substrate
         Substrate object.
     """
-    if (not isinstance(semiaxes, np.ndarray) or semiaxes.shape != (3,) or
-            not np.issubdtype(semiaxes.dtype, np.floating)):
-        raise ValueError(
-            'Incorrect value (%s) for semiaxes' % semiaxes)
+    if (
+        not isinstance(semiaxes, np.ndarray)
+        or semiaxes.shape != (3,)
+        or not np.issubdtype(semiaxes.dtype, np.floating)
+    ):
+        raise ValueError("Incorrect value (%s) for semiaxes" % semiaxes)
     if not isinstance(R, np.ndarray) or R.shape != (3, 3):
-        raise ValueError(
-            'Incorrect value (%s) for R' % R)
-    elif (not np.isclose(np.linalg.det(R), 1) or not
-          np.all(np.isclose(R.T, np.linalg.inv(R)))):
-        raise ValueError(
-            'R (%s) is not a valid rotation matrix' % R)
+        raise ValueError("Incorrect value (%s) for R" % R)
+    elif not np.isclose(np.linalg.det(R), 1) or not np.all(
+        np.isclose(R.T, np.linalg.inv(R))
+    ):
+        raise ValueError("R (%s) is not a valid rotation matrix" % R)
     semiaxes = semiaxes.astype(float)
     R = R.astype(float)
-    substrate = _Substrate('ellipsoid', semiaxes=semiaxes, R=R)
+    substrate = _Substrate("ellipsoid", semiaxes=semiaxes, R=R)
     return substrate
 
 
-def mesh(vertices, faces, padding=np.zeros(3), periodic=False,
-         init_pos='uniform', n_sv=np.array([10, 10, 10])):
+def mesh(
+    vertices,
+    faces,
+    padding=np.zeros(3),
+    periodic=False,
+    init_pos="uniform",
+    n_sv=np.array([10, 10, 10]),
+):
     """Return a substrate object instance for simulating diffusion restricted by
     a triangular mesh. The size of the simulated voxel is equal to the
     axis-aligned bounding box of the triangles plus padding. The triangles are
@@ -175,45 +188,66 @@ def mesh(vertices, faces, padding=np.zeros(3), periodic=False,
     substrate : disimpy.substrates._Substrate
         Substrate object.
     """
-    if (not isinstance(vertices, np.ndarray) or vertices.ndim != 2 or
-            vertices.shape[1] != 3 or
-            not np.issubdtype(vertices.dtype, np.floating)):
-        raise ValueError(
-            'Incorrect value (%s) for vertices.' % vertices)
-    if (not isinstance(faces, np.ndarray) or faces.ndim != 2 or
-            faces.shape[1] != 3 or not np.issubdtype(faces.dtype, np.integer)):
-        raise ValueError('Incorrect value (%s) for faces.' % faces)
-    if (not isinstance(padding, np.ndarray) or padding.shape != (3,) or
-            not np.issubdtype(padding.dtype, np.floating)):
-        raise ValueError('Incorrect value (%s) for padding' % padding)
+    if (
+        not isinstance(vertices, np.ndarray)
+        or vertices.ndim != 2
+        or vertices.shape[1] != 3
+        or not np.issubdtype(vertices.dtype, np.floating)
+    ):
+        raise ValueError("Incorrect value (%s) for vertices." % vertices)
+    if (
+        not isinstance(faces, np.ndarray)
+        or faces.ndim != 2
+        or faces.shape[1] != 3
+        or not np.issubdtype(faces.dtype, np.integer)
+    ):
+        raise ValueError("Incorrect value (%s) for faces." % faces)
+    if (
+        not isinstance(padding, np.ndarray)
+        or padding.shape != (3,)
+        or not np.issubdtype(padding.dtype, np.floating)
+    ):
+        raise ValueError("Incorrect value (%s) for padding" % padding)
     if not isinstance(periodic, bool):
-        raise ValueError('Incorrect value (%s) for periodic' % periodic)
+        raise ValueError("Incorrect value (%s) for periodic" % periodic)
     if isinstance(init_pos, np.ndarray):
-        if (init_pos.ndim != 2 or init_pos.shape[1] != 3 or not
-                np.issubdtype(init_pos.dtype, np.floating)):
-            raise ValueError('Incorrect value (%s) for init_pos' % init_pos)
+        if (
+            init_pos.ndim != 2
+            or init_pos.shape[1] != 3
+            or not np.issubdtype(init_pos.dtype, np.floating)
+        ):
+            raise ValueError("Incorrect value (%s) for init_pos" % init_pos)
     elif isinstance(init_pos, str):
-        if (not (init_pos == 'uniform' or init_pos == 'intra' or
-                 init_pos == 'extra')):
-            raise ValueError('Incorrect value (%s) for init_pos' % init_pos)
+        if not (
+            init_pos == "uniform" or init_pos == "intra" or init_pos == "extra"
+        ):
+            raise ValueError("Incorrect value (%s) for init_pos" % init_pos)
     else:
-        raise ValueError('Incorrect value (%s) for init_pos' % init_pos)
-    if (not isinstance(n_sv, np.ndarray) or n_sv.shape != (3,) or
-            not np.issubdtype(n_sv.dtype, np.integer)):
-        raise ValueError(
-            'Incorrect value (%s) for n_sv' % n_sv)
-    print('Aligning the corner of the simulated voxel with the origin')
-    shift = - np.min(vertices, axis=0) + padding
+        raise ValueError("Incorrect value (%s) for init_pos" % init_pos)
+    if (
+        not isinstance(n_sv, np.ndarray)
+        or n_sv.shape != (3,)
+        or not np.issubdtype(n_sv.dtype, np.integer)
+    ):
+        raise ValueError("Incorrect value (%s) for n_sv" % n_sv)
+    print("Aligning the corner of the simulated voxel with the origin")
+    shift = -np.min(vertices, axis=0) + padding
     vertices = vertices + shift
-    print('Moved the vertices by %s' % shift)
+    print("Moved the vertices by %s" % shift)
     voxel_size = np.max(vertices, axis=0) + padding
     if not periodic:
         voxel_vertices, voxel_faces = _aabb_to_mesh(np.zeros(3), voxel_size)
         faces = np.vstack((faces, voxel_faces + len(vertices)))
         vertices = np.vstack((vertices, voxel_vertices))
     substrate = _Substrate(
-        'mesh', vertices=vertices, faces=faces, voxel_size=voxel_size,
-        n_sv=n_sv, periodic=periodic, init_pos=init_pos)
+        "mesh",
+        vertices=vertices,
+        faces=faces,
+        voxel_size=voxel_size,
+        n_sv=n_sv,
+        periodic=periodic,
+        init_pos=init_pos,
+    )
     return substrate
 
 
@@ -266,22 +300,35 @@ def _triangle_box_overlap(triangle, box):
 
     # Test the triangle AABB against the box
     box_aabb = np.array(
-        [[np.min(v[:, i]) for i in range(3)],
-         [np.max(v[:, i]) for i in range(3)]])
+        [
+            [np.min(v[:, i]) for i in range(3)],
+            [np.max(v[:, i]) for i in range(3)],
+        ]
+    )
     if np.all(box_aabb[0] > h) or np.all(box_aabb[1] < -h):
         return False
 
     # Test the plane in which the triangle is against the box
     f = np.array(
-        [[v[1, 0] - v[0, 0], v[1, 1] - v[0, 1], v[1, 2] - v[0, 2]],
-         [v[2, 0] - v[1, 0], v[2, 1] - v[1, 1], v[2, 2] - v[1, 2]],
-         [v[0, 0] - v[2, 0], v[0, 1] - v[2, 1], v[0, 2] - v[2, 2]]])
+        [
+            [v[1, 0] - v[0, 0], v[1, 1] - v[0, 1], v[1, 2] - v[0, 2]],
+            [v[2, 0] - v[1, 0], v[2, 1] - v[1, 1], v[2, 2] - v[1, 2]],
+            [v[0, 0] - v[2, 0], v[0, 1] - v[2, 1], v[0, 2] - v[2, 2]],
+        ]
+    )
     normal = _cross_product(f[0], f[1])
-    corners = np.array([
-        [h[0], h[1], h[2]], [-h[0], -h[1], -h[2]],
-        [-h[0], h[1], h[2]], [h[0], -h[1], -h[2]],
-        [h[0], -h[1], h[2]], [-h[0], h[1], -h[2]],
-        [h[0], h[1], -h[2]], [-h[0], -h[1], h[2]]])
+    corners = np.array(
+        [
+            [h[0], h[1], h[2]],
+            [-h[0], -h[1], -h[2]],
+            [-h[0], h[1], h[2]],
+            [h[0], -h[1], -h[2]],
+            [h[0], -h[1], h[2]],
+            [-h[0], h[1], -h[2]],
+            [h[0], h[1], -h[2]],
+            [-h[0], -h[1], h[2]],
+        ]
+    )
     in_plane = False
     behind = np.zeros(8, dtype=numba.boolean)
     for i, point in enumerate(corners):
@@ -449,14 +496,16 @@ def _mesh_space_subdivision(vertices, faces, voxel_size, n_sv):
     # Loop over the triangles
     for i, idx in enumerate(faces):
         triangle = vertices[idx]
-        subvoxels = _box_subvoxel_overlap(
-            _triangle_aabb(triangle), xs, ys, zs)
+        subvoxels = _box_subvoxel_overlap(_triangle_aabb(triangle), xs, ys, zs)
         for x in range(subvoxels[0, 0], subvoxels[0, 1]):
             for y in range(subvoxels[1, 0], subvoxels[1, 1]):
                 for z in range(subvoxels[2, 0], subvoxels[2, 1]):
                     box = np.array(
-                        [[xs[x], ys[y], zs[z]],
-                         [xs[x + 1], ys[y + 1], zs[z + 1]]])
+                        [
+                            [xs[x], ys[y], zs[z]],
+                            [xs[x + 1], ys[y + 1], zs[z + 1]],
+                        ]
+                    )
                     if _triangle_box_overlap(triangle, box):
                         subvoxel = x * n_sv[1] * n_sv[2] + y * n_sv[2] + z
                         relevant_triangles[subvoxel].append(i)
@@ -478,24 +527,32 @@ def _mesh_space_subdivision(vertices, faces, voxel_size, n_sv):
 def _aabb_to_mesh(a, b):
     """Return a triangular mesh that corresponds to an axis-aligned bounding box
     defined by points a and b."""
-    vertices = np.array([[a[0], a[1], a[2]],
-                         [b[0], a[1], a[2]],
-                         [b[0], b[1], a[2]],
-                         [b[0], b[1], b[2]],
-                         [a[0], b[1], b[2]],
-                         [a[0], a[1], b[2]],
-                         [a[0], b[1], a[2]],
-                         [b[0], a[1], b[2]]])
-    faces = np.array([[0, 1, 2],
-                      [0, 6, 2],
-                      [5, 7, 3],
-                      [5, 4, 3],
-                      [1, 2, 3],
-                      [1, 7, 3],
-                      [0, 6, 4],
-                      [0, 5, 4],
-                      [0, 1, 7],
-                      [0, 5, 7],
-                      [6, 2, 3],
-                      [6, 4, 3]])
+    vertices = np.array(
+        [
+            [a[0], a[1], a[2]],
+            [b[0], a[1], a[2]],
+            [b[0], b[1], a[2]],
+            [b[0], b[1], b[2]],
+            [a[0], b[1], b[2]],
+            [a[0], a[1], b[2]],
+            [a[0], b[1], a[2]],
+            [b[0], a[1], b[2]],
+        ]
+    )
+    faces = np.array(
+        [
+            [0, 1, 2],
+            [0, 6, 2],
+            [5, 7, 3],
+            [5, 4, 3],
+            [1, 2, 3],
+            [1, 7, 3],
+            [0, 6, 4],
+            [0, 5, 4],
+            [0, 1, 7],
+            [0, 5, 7],
+            [6, 2, 3],
+            [6, 4, 3],
+        ]
+    )
     return vertices, faces

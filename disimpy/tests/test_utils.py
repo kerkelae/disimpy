@@ -11,9 +11,9 @@ from .. import utils
 def test_vec2vec_rotmat():
     np.random.seed(123)
     for _ in range(100):
-        a = np.random.random(3) - .5
+        a = np.random.random(3) - 0.5
         a_norm = np.linalg.norm(a)
-        b = np.random.random(3) - .5
+        b = np.random.random(3) - 0.5
         b_norm = np.linalg.norm(b)
         R = utils.vec2vec_rotmat(a, b)
         npt.assert_array_almost_equal(np.linalg.norm(a), a_norm)

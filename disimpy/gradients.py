@@ -34,12 +34,21 @@ def interpolate_gradient(gradient, dt, n_t):
     dt *= gradient.shape[1] / n_t
     interp_g = np.zeros((gradient.shape[0], int(n_t), gradient.shape[2]))
     for m in range(gradient.shape[0]):
-        interp_g[m, :, 0] = np.interp(np.arange(n_t), np.linspace(
-            0, n_t - 1, gradient.shape[1]), gradient[m, :, 0])
-        interp_g[m, :, 1] = np.interp(np.arange(n_t), np.linspace(
-            0, n_t - 1, gradient.shape[1]), gradient[m, :, 1])
-        interp_g[m, :, 2] = np.interp(np.arange(n_t), np.linspace(
-            0, n_t - 1, gradient.shape[1]), gradient[m, :, 2])
+        interp_g[m, :, 0] = np.interp(
+            np.arange(n_t),
+            np.linspace(0, n_t - 1, gradient.shape[1]),
+            gradient[m, :, 0],
+        )
+        interp_g[m, :, 1] = np.interp(
+            np.arange(n_t),
+            np.linspace(0, n_t - 1, gradient.shape[1]),
+            gradient[m, :, 1],
+        )
+        interp_g[m, :, 2] = np.interp(
+            np.arange(n_t),
+            np.linspace(0, n_t - 1, gradient.shape[1]),
+            gradient[m, :, 2],
+        )
     return interp_g, dt
 
 
@@ -78,7 +87,7 @@ def calc_b(gradient, dt):
         b-values.
     """
     q = calc_q(gradient, dt)
-    b = np.trapz(np.linalg.norm(q, axis=2)**2, axis=1, dx=dt)
+    b = np.trapz(np.linalg.norm(q, axis=2) ** 2, axis=1, dx=dt)
     return b
 
 
@@ -101,8 +110,9 @@ def set_b(gradient, dt, b):
     """
     if np.any(b == 0):
         raise ValueError(
-            'b can not be equal to 0. If b = 0, the simulated signal is simply'
-            + ' equal to the number of random walkers.')
+            "b can not be equal to 0. If b = 0, the simulated signal is simply"
+            + " equal to the number of random walkers."
+        )
     ratio = b / calc_b(gradient, dt)
     scaled_g = gradient * np.sqrt(ratio)[:, np.newaxis, np.newaxis]
     return scaled_g
@@ -126,9 +136,11 @@ def rotate_gradient(gradient, Rs):
     """
     g = np.zeros(gradient.shape)
     for i, R in enumerate(Rs):
-        if (not np.isclose(np.linalg.det(R), 1) or
-                not np.all(np.isclose(R.T, np.linalg.inv(R)))):
+        if not np.isclose(np.linalg.det(R), 1) or not np.all(
+            np.isclose(R.T, np.linalg.inv(R))
+        ):
             raise ValueError(
-                'Rs[%s] (%s) is not a valid rotation matrix' % (i, R))
+                "Rs[%s] (%s) is not a valid rotation matrix" % (i, R)
+            )
         g[i, :, :] = np.matmul(R, gradient[i, :, :].T).T
     return g

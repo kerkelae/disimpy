@@ -218,7 +218,9 @@ def mesh(
         ):
             raise ValueError("Incorrect value (%s) for init_pos" % init_pos)
     elif isinstance(init_pos, str):
-        if not (init_pos == "uniform" or init_pos == "intra" or init_pos == "extra"):
+        if not (
+            init_pos == "uniform" or init_pos == "intra" or init_pos == "extra"
+        ):
             raise ValueError("Incorrect value (%s) for init_pos" % init_pos)
     else:
         raise ValueError("Incorrect value (%s) for init_pos" % init_pos)
@@ -233,7 +235,7 @@ def mesh(
     vertices = vertices + shift
     print("Moved the vertices by %s" % shift)
     voxel_size = np.max(vertices, axis=0) + padding
-    if not periodic:
+    if not periodic:  # Add the simulated voxel boundaries to the triangles
         voxel_vertices, voxel_faces = _aabb_to_mesh(np.zeros(3), voxel_size)
         faces = np.vstack((faces, voxel_faces + len(vertices)))
         vertices = np.vstack((vertices, voxel_vertices))
@@ -298,7 +300,10 @@ def _triangle_box_overlap(triangle, box):
 
     # Test the triangle AABB against the box
     box_aabb = np.array(
-        [[np.min(v[:, i]) for i in range(3)], [np.max(v[:, i]) for i in range(3)],]
+        [
+            [np.min(v[:, i]) for i in range(3)],
+            [np.max(v[:, i]) for i in range(3)],
+        ]
     )
     if np.all(box_aabb[0] > h) or np.all(box_aabb[1] < -h):
         return False
@@ -496,7 +501,10 @@ def _mesh_space_subdivision(vertices, faces, voxel_size, n_sv):
             for y in range(subvoxels[1, 0], subvoxels[1, 1]):
                 for z in range(subvoxels[2, 0], subvoxels[2, 1]):
                     box = np.array(
-                        [[xs[x], ys[y], zs[z]], [xs[x + 1], ys[y + 1], zs[z + 1]],]
+                        [
+                            [xs[x], ys[y], zs[z]],
+                            [xs[x + 1], ys[y + 1], zs[z + 1]],
+                        ]
                     )
                     if _triangle_box_overlap(triangle, box):
                         subvoxel = x * n_sv[1] * n_sv[2] + y * n_sv[2] + z

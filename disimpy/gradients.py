@@ -139,6 +139,8 @@ def rotate_gradient(gradient, Rs):
         if not np.isclose(np.linalg.det(R), 1) or not np.all(
             np.isclose(R.T, np.linalg.inv(R))
         ):
-            raise ValueError("Rs[%s] (%s) is not a valid rotation matrix" % (i, R))
+            raise ValueError(
+                "Rs[%s] (%s) is not a valid rotation matrix" % (i, R)
+            )
         g[i, :, :] = np.matmul(R, gradient[i, :, :].T).T
     return g

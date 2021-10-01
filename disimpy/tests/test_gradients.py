@@ -26,13 +26,19 @@ def test_interpolate_gradient():
     npt.assert_equal(interp_g_2.shape, (5, n_t, 3))
     npt.assert_almost_equal(dt_1, dt * gradient_1.shape[1] / n_t, 10)
     npt.assert_almost_equal(dt_1, dt * gradient_2.shape[1] / n_t, 10)
-    npt.assert_almost_equal(np.max(interp_g_1, axis=1), np.max(gradient_1, axis=1))
-    npt.assert_almost_equal(np.max(interp_g_2, axis=1), np.max(gradient_2, axis=1))
     npt.assert_almost_equal(
-        np.trapz(interp_g_1, axis=1, dx=dt_1), np.trapz(gradient_1, axis=1, dx=dt),
+        np.max(interp_g_1, axis=1), np.max(gradient_1, axis=1)
     )
     npt.assert_almost_equal(
-        np.trapz(interp_g_2, axis=1, dx=dt_2), np.trapz(gradient_2, axis=1, dx=dt),
+        np.max(interp_g_2, axis=1), np.max(gradient_2, axis=1)
+    )
+    npt.assert_almost_equal(
+        np.trapz(interp_g_1, axis=1, dx=dt_1),
+        np.trapz(gradient_1, axis=1, dx=dt),
+    )
+    npt.assert_almost_equal(
+        np.trapz(interp_g_2, axis=1, dx=dt_2),
+        np.trapz(gradient_2, axis=1, dx=dt),
     )
     return
 
@@ -71,7 +77,9 @@ def test_set_b():
     npt.assert_almost_equal(b_1 / b, np.array([1]))
     npt.assert_almost_equal(b_2 / b, np.ones(5))
     bs = np.arange(5) * 1e9
-    npt.assert_raises(ValueError, gradients.set_b, gradient=gradient_2, dt=dt, b=bs)
+    npt.assert_raises(
+        ValueError, gradients.set_b, gradient=gradient_2, dt=dt, b=bs
+    )
     bs = np.arange(1, 6) * 1e9
     scaled_g_2 = gradients.set_b(gradient_2, dt, bs)
     bs_2 = gradients.calc_b(scaled_g_2, dt)
@@ -97,5 +105,7 @@ def test_rotate_gradient():
     npt.assert_almost_equal(b, d)
     Rs = np.ones((1, 3, 3))
     npt.assert_raises
-    npt.assert_raises(ValueError, gradients.rotate_gradient, gradient=gradient, Rs=Rs)
+    npt.assert_raises(
+        ValueError, gradients.rotate_gradient, gradient=gradient, Rs=Rs
+    )
     return

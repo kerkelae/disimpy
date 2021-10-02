@@ -790,12 +790,39 @@ def test_mesh_diffusion():
     )
 
     # Test periodic boundary conditions
+    mesh_path = os.path.join(
+        os.path.dirname(simulations.__file__),
+        "tests",
+        "cylinder_mesh_open.pkl",
+    )
+    with open(mesh_path, "rb") as f:
+        example_mesh = pickle.load(f)
+    faces = example_mesh["faces"]
+    vertices = example_mesh["vertices"]
+    init_pos = np.zeros((n_s, 3)) + np.array([5e-6, 5e-6, 12.5e-6])
+    substrate = substrates.mesh(
+        vertices, faces, init_pos=init_pos, periodic=True
+    )
+    signals, pos = simulations.simulation(
+        n_s, diffusivity, gradient, dt, substrate, final_pos=True
+    )
+    r = np.max(
+        np.linalg.norm(
+            substrate.vertices[:, 0:2] - substrate.voxel_size[0:2] / 2, axis=1
+        )
+    )
+    l = substrate.voxel_size[2]
+    npt.assert_equal(np.min(pos[:, 2]) < 0, True)
+    npt.assert_equal(np.max(pos[:, 2]) > l, True)
+    npt.assert_equal(
+        np.max(
+            np.linalg.norm(
+                pos[:, 0:2] - np.max(substrate.vertices, axis=0)[0:2] / 2,
+                axis=1,
+            )
+        )
+        < r,
+        True,
+    )
 
-    # Make sure no spins leak another meshes and with other variables
-
-    return
-
-
-def test_simulation_input_validation():
-    # TO DO
     return

@@ -23,8 +23,6 @@ class _Substrate:
             self.faces = kwargs["faces"]
             self.voxel_size = kwargs["voxel_size"]
             self.periodic = kwargs["periodic"]
-            if self.periodic:
-                print("Periodic boundary conditions not supported yet")
             self.init_pos = kwargs["init_pos"]
             self.n_sv = kwargs["n_sv"]
             print("Dividing mesh into subvoxels")

@@ -3,13 +3,14 @@ Contributing
 ************
 
 We warmly welcome contributions to Disimpy from other scientists and developers.
-If you want to discuss ideas before writing code, please start by creating an
-issue on `GitHub <https://github.com/kerkelae/disimpy/issues>`_ and we'll help
-you get started! Creating issues is also a great way to inform us about any bugs
+
+If you want to discuss ideas before writing code, please start by opening an
+`issue on GitHub <https://github.com/kerkelae/disimpy/issues>`_ and we'll help
+you get started. Creating issues is also a great way to inform us about any bugs
 or problems you may encounter.
 
 If you already have a well-defined idea or want to make small changes (fix
-typos, improve code style etc.), please fork the repository, create a branch
+typos, improve code style, etc.), please fork the repository, create a branch
 with a descriptive name, make the necessary changes, and create a pull request.
 
 All code should aim to comply with `PEP8 <https://www.python.org/dev/peps/pep-0008/>`_

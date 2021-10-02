@@ -61,7 +61,7 @@ html_theme = 'alabaster'
 html_static_path = ['_static']
 
 html_theme_options = {
-    'page_width': '1090px',  # Default width is too narrow for notebooks
+    'page_width': '1090px',  # Default is too narrow for standard notebooks
     'description': 'Massively parallel diffusion MR simulator written in Python.',
     'logo' : 'logo.png',
     'logo_name' : True

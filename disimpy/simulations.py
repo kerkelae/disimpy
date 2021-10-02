@@ -2,8 +2,9 @@
 
 import os
 import time
-import contextlib
 import math
+import warnings
+import contextlib
 import numpy as np
 import numba
 from numba import cuda
@@ -12,7 +13,6 @@ from numba.cuda.random import (
     xoroshiro128p_normal_float64,
     xoroshiro128p_uniform_float64,
 )
-from warnings import warn
 
 from . import utils, substrates
 from .gradients import GAMMA
@@ -1325,7 +1325,7 @@ def simulation(
     # Check if the intersection algorithm iteration limit was exceeded
     iter_exc = d_iter_exc.copy_to_host(stream=stream)
     if np.any(iter_exc):
-        warn(
+        warnings.warn(
             "Maximum number of iterations was exceeded in the intersection "
             + "check algorithm for walkers %s" % np.where(iter_exc)[0]
         )

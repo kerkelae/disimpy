@@ -23,7 +23,7 @@ def vec2vec_rotmat(v, k):
     """
     v = v / np.linalg.norm(v)
     k = k / np.linalg.norm(k)
-    axis = np.cross(v, k).astype(np.float)
+    axis = np.cross(v, k).astype(float)
     if np.linalg.norm(axis) < np.finfo(float).eps:
         if np.linalg.norm(v - k) > np.linalg.norm(v):
             return -np.eye(3)
@@ -44,7 +44,7 @@ def vec2vec_rotmat(v, k):
     return R
 
 
-def show_traj(traj_file, show=True):
+def show_traj(traj_file):
     """Visualize walker trajectories saved in a trajectories file.
 
     Parameters
@@ -73,9 +73,10 @@ def show_traj(traj_file, show=True):
     ax.ticklabel_format(style="sci", scilimits=(0, 0))
     fig.tight_layout()
     plt.show()
+    return
 
 
-def show_mesh(substrate, alpha=0.5, show=True):
+def show_mesh(substrate, alpha=0.5):
     """Visualize a triangular mesh with random triangle colours.
 
     Parameters

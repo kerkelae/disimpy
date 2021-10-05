@@ -25,17 +25,6 @@ def load_example_gradient():
     return gradient, dt
 
 
-def load_example_mesh():
-    mesh_path = os.path.join(
-        os.path.dirname(simulations.__file__), "tests", "example_mesh.pkl"
-    )
-    with open(mesh_path, "rb") as f:
-        example_mesh = pickle.load(f)
-    faces = example_mesh["faces"]
-    vertices = example_mesh["vertices"]
-    return faces, vertices
-
-
 def test__cuda_dot_product():
     @cuda.jit()
     def test_kernel(a, b, dp):
@@ -420,59 +409,29 @@ def test__fill_mesh():
         np.array([1, 5, 20]),
         np.array([10, 10, 10]),
     ]:
+        for periodic in [True, False]:
+            for padding in [np.zeros(3), np.zeros(3) + 1e-6]:
 
-        substrate = substrates.mesh(vertices, faces, n_sv=n_sv)
-        points = simulations._fill_mesh(n_s, substrate, True, seed=123)
-        r = substrate.voxel_size / 2
-        points -= r
-        npt.assert_equal(np.max(np.linalg.norm(points, axis=1)) < r, True)
-        npt.assert_almost_equal(np.mean(points, axis=0), np.zeros(3))
-        points = simulations._fill_mesh(n_s, substrate, False, seed=123)
-        points -= r
-        npt.assert_equal(np.min(np.linalg.norm(points, axis=1)) > 0.9 * r, True)
-        npt.assert_almost_equal(np.mean(points, axis=0), np.zeros(3))
+                substrate = substrates.mesh(
+                    vertices, faces, periodic, padding=padding, n_sv=n_sv
+                )
+                points = simulations._fill_mesh(n_s, substrate, True, seed=123)
+                r = (substrate.voxel_size - padding * 2) / 2
+                points -= r + padding
+                npt.assert_equal(np.max(np.linalg.norm(points, axis=1)) < r, True)
+                npt.assert_almost_equal(np.mean(points, axis=0), np.zeros(3))
+                points = simulations._fill_mesh(n_s, substrate, False, seed=123)
+                points -= r + padding
+                npt.assert_equal(np.min(np.linalg.norm(points, axis=1)) > 0.9 * r, True)
+                npt.assert_almost_equal(np.mean(points, axis=0), np.zeros(3))
 
-        padding = np.ones(3) * 2e-6
-        substrate = substrates.mesh(vertices, faces, padding=padding, n_sv=n_sv)
-        points = simulations._fill_mesh(n_s, substrate, True, seed=123)
-        points -= r + padding
-        npt.assert_equal(np.max(np.linalg.norm(points, axis=1)) < r, True)
-        npt.assert_almost_equal(np.mean(points, axis=0), np.zeros(3))
-        points = simulations._fill_mesh(n_s, substrate, False, seed=123)
-        points -= r + padding
-        npt.assert_equal(np.min(np.linalg.norm(points, axis=1)) > 0.9 * r, True)
-        npt.assert_almost_equal(np.mean(points, axis=0), np.zeros(3))
-
-    mesh_path = os.path.join(
-        os.path.dirname(simulations.__file__), "tests", "cylinder_mesh_closed.pkl",
-    )
-    with open(mesh_path, "rb") as f:
-        example_mesh = pickle.load(f)
-    faces = example_mesh["faces"]
-    vertices = example_mesh["vertices"]
-
-    substrate = substrates.mesh(vertices, faces)
-    points = simulations._fill_mesh(n_s, substrate, True, seed=123)
-    r = np.max(np.linalg.norm(vertices[:, 0:2] - substrate.voxel_size[0:2] / 2, axis=1))
-    l = substrate.voxel_size[2]
-    npt.assert_equal(np.min(points[:, 2]) > 0, True)
-    npt.assert_equal(np.max(points[:, 2]) < l, True)
-    npt.assert_equal(
-        np.max(
-            np.linalg.norm(points[:, 0:2] - np.max(vertices, axis=0)[0:2] / 2, axis=1)
-        )
-        < r,
-        True,
-    )
-    points = simulations._fill_mesh(n_s, substrate, False, seed=123)
-    npt.assert_equal(np.min(np.linalg.norm(points[:, 0:2] - r, axis=1)) / 0.9 > r, True)
     return
 
 
 def test_free_diffusion():
 
     # Signal
-    n_s = int(1e6)
+    n_s = int(1e5)
     n_t = int(1e3)
     diffusivity = 2e-9
     gradient, dt = load_example_gradient()
@@ -482,7 +441,7 @@ def test_free_diffusion():
     gradient = gradients.set_b(gradient, dt, bs)
     substrate = substrates.free()
     signals = simulations.simulation(n_s, diffusivity, gradient, dt, substrate)
-    npt.assert_almost_equal(signals / n_s, np.exp(-bs * diffusivity), 3)
+    npt.assert_almost_equal(signals / n_s, np.exp(-bs * diffusivity), 2)
 
     # Walker trajectories
     n_s = int(1e4)
@@ -588,6 +547,7 @@ def test_cylinder_diffusion():
     substrate = substrates.cylinder(orientation=-np.array([1.0, 0, 0]), radius=5e-6)
     signals_3 = simulations.simulation(n_s, diffusivity, gradient, dt, substrate)
     npt.assert_almost_equal(signals_3 / n_s, np.exp(-bs * diffusivity), 2)
+
     return
 
 
@@ -687,7 +647,7 @@ def test_ellipsoid_diffusion():
 
 def test_mesh_diffusion():
 
-    n_s = int(1e5)
+    n_s = int(1e4)
     n_t = int(1e3)
     diffusivity = 2e-9
 
@@ -698,7 +658,6 @@ def test_mesh_diffusion():
         example_mesh = pickle.load(f)
     faces = example_mesh["faces"]
     vertices = example_mesh["vertices"]
-    substrate = substrates.mesh(vertices, faces, init_pos="intra")
 
     T = 70e-3
     gradient = np.zeros((1, 700, 3))
@@ -710,39 +669,59 @@ def test_mesh_diffusion():
     gradient, dt = gradients.interpolate_gradient(gradient, dt, n_t)
     gradient = gradients.set_b(gradient, dt, bs)
 
-    signals, pos = simulations.simulation(
-        n_s, diffusivity, gradient, dt, substrate, final_pos=True
-    )
+    for periodic in [True, False]:
+        for padding in [np.zeros(3), np.zeros(3) + 1e-6]:
+            for n_sv in [
+                np.array([1, 1, 1]),
+                np.array([1, 5, 20]),
+                np.array([10, 10, 10]),
+            ]:
 
-    # Compare signal against misst
-    misst_signals_path = os.path.join(
-        os.path.dirname(gradients.__file__),
-        "tests",
-        "misst_cylinder_signal_smalldelta_30ms_bigdelta_40ms_radius_5um.txt",
-    )
-    misst_signals = np.loadtxt(misst_signals_path)
-    npt.assert_almost_equal(signals / n_s, misst_signals, 2)
+                substrate = substrates.mesh(
+                    vertices,
+                    faces,
+                    periodic,
+                    padding=padding,
+                    init_pos="intra",
+                    n_sv=n_sv,
+                )
 
-    # Make sure no spins leaked
-    r = np.max(
-        np.linalg.norm(
-            substrate.vertices[:, 0:2] - substrate.voxel_size[0:2] / 2, axis=1
-        )
-    )
-    l = substrate.voxel_size[2]
-    npt.assert_equal(np.min(pos[:, 2]) > 0, True)
-    npt.assert_equal(np.max(pos[:, 2]) < l, True)
-    npt.assert_equal(
-        np.max(
-            np.linalg.norm(
-                pos[:, 0:2] - np.max(substrate.vertices, axis=0)[0:2] / 2, axis=1,
-            )
-        )
-        < r,
-        True,
-    )
+                signals, pos = simulations.simulation(
+                    n_s, diffusivity, gradient, dt, substrate, final_pos=True
+                )
 
-    # Test periodic boundary conditions
+                # Compare to misst signal
+                misst_signals_path = os.path.join(
+                    os.path.dirname(gradients.__file__),
+                    "tests",
+                    "misst_cylinder_signal_smalldelta_30ms_bigdelta_40ms_radius_5um.txt",
+                )
+                misst_signals = np.loadtxt(misst_signals_path)
+                npt.assert_almost_equal(signals / n_s, misst_signals, 2)
+
+                # Make sure no spins leaked
+                r = np.max(
+                    np.linalg.norm(
+                        substrate.vertices[:, 0:2]
+                        - (substrate.voxel_size[0:2] - padding[0:2] * 2) / 2,
+                        axis=1,
+                    )
+                )
+                l = substrate.voxel_size[2]
+                npt.assert_equal(np.min(pos[:, 2]) > 0, True)
+                npt.assert_equal(np.max(pos[:, 2]) < l, True)
+                npt.assert_equal(
+                    np.max(
+                        np.linalg.norm(
+                            pos[:, 0:2] - np.max(substrate.vertices, axis=0)[0:2] / 2,
+                            axis=1,
+                        )
+                    )
+                    < r,
+                    True,
+                )
+
+    # Test with a periodic mesh
     mesh_path = os.path.join(
         os.path.dirname(simulations.__file__), "tests", "cylinder_mesh_open.pkl",
     )
@@ -751,26 +730,43 @@ def test_mesh_diffusion():
     faces = example_mesh["faces"]
     vertices = example_mesh["vertices"]
     init_pos = np.zeros((n_s, 3)) + np.array([5e-6, 5e-6, 12.5e-6])
-    substrate = substrates.mesh(vertices, faces, init_pos=init_pos, periodic=True)
-    signals, pos = simulations.simulation(
-        n_s, diffusivity, gradient, dt, substrate, final_pos=True
-    )
-    r = np.max(
-        np.linalg.norm(
-            substrate.vertices[:, 0:2] - substrate.voxel_size[0:2] / 2, axis=1
-        )
-    )
-    l = substrate.voxel_size[2]
-    npt.assert_equal(np.min(pos[:, 2]) < 0, True)
-    npt.assert_equal(np.max(pos[:, 2]) > l, True)
-    npt.assert_equal(
-        np.max(
-            np.linalg.norm(
-                pos[:, 0:2] - np.max(substrate.vertices, axis=0)[0:2] / 2, axis=1,
+
+    for padding in [np.zeros(3), np.array([1e-6, 1e-6, 0])]:
+        for n_sv in [
+            np.array([1, 1, 1]),
+            np.array([1, 5, 20]),
+            np.array([10, 10, 10]),
+        ]:
+            substrate = substrates.mesh(
+                vertices,
+                faces,
+                init_pos=init_pos + padding,
+                periodic=True,
+                padding=padding,
+                n_sv=n_sv,
             )
-        )
-        < r,
-        True,
-    )
+            signals, pos = simulations.simulation(
+                n_s, diffusivity, gradient, dt, substrate, final_pos=True
+            )
+            r = np.max(
+                np.linalg.norm(
+                    substrate.vertices[:, 0:2]
+                    - (substrate.voxel_size[0:2] - padding[0:2] * 2) / 2,
+                    axis=1,
+                )
+            )
+            l = substrate.voxel_size[2]
+            npt.assert_equal(np.min(pos[:, 2]) < 0, True)
+            npt.assert_equal(np.max(pos[:, 2]) > l, True)
+            npt.assert_equal(
+                np.max(
+                    np.linalg.norm(
+                        pos[:, 0:2] - np.max(substrate.vertices, axis=0)[0:2] / 2,
+                        axis=1,
+                    )
+                )
+                < r,
+                True,
+            )
 
     return

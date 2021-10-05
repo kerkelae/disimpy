@@ -15,9 +15,14 @@ disimpy.simulations
 .. automodule:: disimpy.simulations
     :members:
 
+disimpy.substrates
+##################
+
+.. automodule:: disimpy.substrates
+    :members:
+
 disimpy.utils
 #############
 
 .. automodule:: disimpy.utils
     :members:
-

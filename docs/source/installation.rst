@@ -5,7 +5,7 @@ Installation
 Hardware requirements
 #####################
 
-You need an Nvidia's CUDA-enabled GPU with compute capability 2.0 or above with
+You need an Nvidia's CUDA-capable GPU with compute capability 2.0 or above with
 the appropriate Nvidia driver. You can check if your GPU is supported on
 `Nvidia's website <https://developer.nvidia.com/cuda-gpus>`_.
 
@@ -44,17 +44,16 @@ pip by executing: ::
 Alternatively, given that the requirements specified above are met, you can use
 Disimpy without installing by directly importing the functions you want to use
 from the directory you can download
-`here <https://github.com/kerkelae/disimpy/archive/master.zip>`_.
+`here <https://github.com/kerkelae/disimpy/archive/master.zip>`_ or by cloning
+the repository.
 
 Automated tests
 ###############
 
-To confirm that the installation and CUDA configuration works, you should run
-the automated tests by executing the following in the Python interpreter:
+To confirm that the installed simulator works, you should run the automated
+tests by executing the following in the Python interpreter:
 
 .. code-block:: python
 
    import disimpy.tests
    disimpy.tests.test_all()
-
-Running the tests may take up to a few minutes depending on your GPU.

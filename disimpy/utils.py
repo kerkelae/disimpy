@@ -23,27 +23,28 @@ def vec2vec_rotmat(v, k):
     """
     v = v / np.linalg.norm(v)
     k = k / np.linalg.norm(k)
-    axis = np.cross(v, k).astype(np.float)
+    axis = np.cross(v, k).astype(float)
     if np.linalg.norm(axis) < np.finfo(float).eps:
         if np.linalg.norm(v - k) > np.linalg.norm(v):
             return -np.eye(3)
         else:
             return np.eye(3)
     axis /= np.linalg.norm(axis)
-    angle = np.arcsin(np.linalg.norm(np.cross(v, k)) /
-                      (np.linalg.norm(k) * np.linalg.norm(v)))
+    angle = np.arcsin(
+        np.linalg.norm(np.cross(v, k)) / (np.linalg.norm(k) * np.linalg.norm(v))
+    )
     if np.dot(v, k) < 0:
         angle = np.pi - angle
-    K = np.array([[0, -axis[2], axis[1]],
-                  [axis[2], 0, -axis[0]],
-                  [-axis[1], axis[0], 0]])
-    R = np.eye(3) + \
-        np.sin(angle) * K + \
-        (1 - np.cos(angle)) * np.matmul(K, K)  # Rodrigues' rotation formula
+    K = np.array(
+        [[0, -axis[2], axis[1]], [axis[2], 0, -axis[0]], [-axis[1], axis[0], 0]]
+    )
+    R = (
+        np.eye(3) + np.sin(angle) * K + (1 - np.cos(angle)) * np.matmul(K, K)
+    )  # Rodrigues' rotation formula
     return R
 
 
-def show_traj(traj_file, show=True):
+def show_traj(traj_file):
     """Visualize walker trajectories saved in a trajectories file.
 
     Parameters
@@ -52,76 +53,54 @@ def show_traj(traj_file, show=True):
         Path to trajectories file that contains walker trajectories. Every line
         represents a time point. Every line contains the positions as follows:
         walker_1_x walker_1_y walker_1_z walker_2_x walker_2_y walker_2_z...
-    show : bool
-        Whether to render the figure.
-
-    Returns
-    -------
-    None
     """
     trajectories = np.loadtxt(traj_file)
-    trajectories = trajectories.reshape((trajectories.shape[0],
-                                         int(trajectories.shape[1] / 3),
-                                         3))
+    trajectories = trajectories.reshape(
+        (trajectories.shape[0], int(trajectories.shape[1] / 3), 3)
+    )
     fig = plt.figure()
-    ax = fig.add_subplot(111, projection='3d')
+    ax = fig.add_subplot(111, projection="3d")
     for i in range(trajectories.shape[1]):
-        ax.plot(trajectories[:, i, 0],
-                trajectories[:, i, 1],
-                trajectories[:, i, 2],
-                alpha=.5)
-    ax.set_xlabel('x')
-    ax.set_ylabel('y')
-    ax.set_zlabel('z')
-    ax.ticklabel_format(style='sci', scilimits=(0, 0))
+        ax.plot(
+            trajectories[:, i, 0],
+            trajectories[:, i, 1],
+            trajectories[:, i, 2],
+            alpha=0.5,
+        )
+    ax.set_xlabel("x")
+    ax.set_ylabel("y")
+    ax.set_zlabel("z")
+    ax.ticklabel_format(style="sci", scilimits=(0, 0))
     fig.tight_layout()
-    if show:
-        plt.show()
-    else:
-        plt.close(fig)
+    plt.show()
     return
 
 
-def show_mesh(mesh, show=True):
-    """Visualize the triangular mesh with random triangle colours.
+def show_mesh(substrate, alpha=0.5):
+    """Visualize a triangular mesh with random triangle colours.
 
     Parameters
     ----------
-    mesh : numpy.ndarray
-        Mesh array of shape (n of triangles, 3, 3) where the second dimension
-        indices correspond to different triangle points and the third dimension
-        is the Cartesian coordinates of triangle.
-    show : bool
-        Whether to render figure or not.
-
-    Returns
-    -------
-    None
+    substrate : disimpy.substrates._Substrate
+        Substrate object containing the triangular mesh.
+    alpha : float
+        Parameter controlling the triangle transparency.
     """
     np.random.seed(123)
     fig = plt.figure()
-    ax = fig.add_subplot(111, projection='3d')
-    mesh_min = np.min(np.min(mesh, 0), 0)
-    mesh_max = np.max(np.max(mesh, 0), 0)
-    ax.set_xlim([mesh_min[0], mesh_max[0]])
-    ax.set_ylim([mesh_min[1], mesh_max[1]])
-    ax.set_zlim([mesh_min[2], mesh_max[2]])
-    for triangle in mesh:
-        A = triangle[0, :]
-        B = triangle[1, :]
-        C = triangle[2, :]
-        vtx = np.array([A, B, C])
-        tri = Poly3DCollection([vtx], alpha=.5)
+    ax = fig.add_subplot(111, projection="3d")
+    for idx in substrate.faces:
+        tri = Poly3DCollection(substrate.vertices[idx], alpha=alpha)
         face_color = np.random.random(3)
         tri.set_facecolor(face_color)
         ax.add_collection3d(tri)
-    ax.set_xlabel('x')
-    ax.set_ylabel('y')
-    ax.set_zlabel('z')
-    ax.ticklabel_format(style='sci', scilimits=(0, 0))
+    ax.set_xlim([0, substrate.voxel_size[0]])
+    ax.set_ylim([0, substrate.voxel_size[1]])
+    ax.set_zlim([0, substrate.voxel_size[2]])
+    ax.set_xlabel("x")
+    ax.set_ylabel("y")
+    ax.set_zlabel("z")
+    ax.ticklabel_format(style="sci", scilimits=(0, 0))
     fig.tight_layout()
-    if show:
-        plt.show()
-    else:
-        plt.close(fig)
+    plt.show()
     return

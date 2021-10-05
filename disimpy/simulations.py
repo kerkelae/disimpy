@@ -20,7 +20,7 @@ from .gradients import GAMMA
 
 @cuda.jit(device=True)
 def _cuda_dot_product(a, b):
-    """Calculate the dot product between two 1D arrays of length 3.
+    """Calculate the dot product between two 1D arrays of length 3. aaaaaaaaaaaaaaaaaaaaaaaaaaaa
 
     Parameters
     ----------

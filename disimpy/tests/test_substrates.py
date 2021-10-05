@@ -15,6 +15,7 @@ from .. import substrates
 def test_free():
     substrate = substrates.free()
     npt.assert_equal(isinstance(substrate, substrates._Substrate), True)
+    npt.assert_equal(substrate.type, "free")
     return
 
 
@@ -25,6 +26,7 @@ def test_sphere():
     substrate = substrates.sphere(radius)
     npt.assert_equal(isinstance(substrate, substrates._Substrate), True)
     npt.assert_equal(substrate.radius, radius)
+    npt.assert_equal(substrate.type, "sphere")
     return
 
 
@@ -51,15 +53,22 @@ def test_cylinder():
     npt.assert_equal(isinstance(substrate, substrates._Substrate), True)
     npt.assert_equal(substrate.radius, radius)
     npt.assert_equal(substrate.orientation, orientation / np.linalg.norm(orientation))
+    npt.assert_equal(substrate.type, "cylinder")
     return
 
 
 def test_ellipsoid():
     npt.assert_raises(ValueError, substrates.ellipsoid, semiaxes="s")
     npt.assert_raises(ValueError, substrates.ellipsoid, semiaxes=np.arange(4))
+    npt.assert_raises(
+        ValueError, substrates.ellipsoid, semiaxes=np.arange(3).astype(int)
+    )
     semiaxes = np.array([5e-6, 1e-6, 10e-6])
     npt.assert_raises(ValueError, substrates.ellipsoid, semiaxes=semiaxes, R="R")
     npt.assert_raises(ValueError, substrates.ellipsoid, semiaxes=semiaxes, R=np.eye(4))
+    npt.assert_raises(
+        ValueError, substrates.ellipsoid, semiaxes=semiaxes, R=np.eye(3).astype(int)
+    )
     npt.assert_raises(
         ValueError, substrates.ellipsoid, semiaxes=semiaxes, R=np.zeros((3, 3))
     )
@@ -67,30 +76,171 @@ def test_ellipsoid():
     npt.assert_equal(isinstance(substrate, substrates._Substrate), True)
     npt.assert_equal(substrate.semiaxes, semiaxes)
     npt.assert_equal(substrate.R, np.eye(3))
-    R = np.array([[0, -1, 0], [1, 0, 0], [0, 0, 1]])
+    npt.assert_equal(substrate.type, "ellipsoid")
+    R = np.array([[0, -1, 0], [1, 0, 0], [0, 0, 1]]).astype(float)
     substrate = substrates.ellipsoid(semiaxes, R)
     npt.assert_equal(isinstance(substrate, substrates._Substrate), True)
     npt.assert_equal(substrate.semiaxes, semiaxes)
     npt.assert_equal(substrate.R, R)
+    npt.assert_equal(substrate.type, "ellipsoid")
     return
 
 
 def test_mesh():
-    # This is the last test to be written in this module!
+    mesh_path = os.path.join(
+        os.path.dirname(substrates.__file__), "tests", "sphere_mesh.pkl",
+    )
+    with open(mesh_path, "rb") as f:
+        example_mesh = pickle.load(f)
+    faces = example_mesh["faces"]
+    vertices = example_mesh["vertices"]
+    npt.assert_raises(
+        ValueError, substrates.mesh, vertices="v", faces=faces, periodic=True
+    )
+    npt.assert_raises(
+        ValueError, substrates.mesh, vertices=np.zeros(2), faces=faces, periodic=True
+    )
+    npt.assert_raises(
+        ValueError,
+        substrates.mesh,
+        vertices=np.zeros((1, 4)),
+        faces=faces,
+        periodic=True,
+    )
+    npt.assert_raises(
+        ValueError,
+        substrates.mesh,
+        vertices=vertices.astype(int),
+        faces=faces,
+        periodic=True,
+    )
+    npt.assert_raises(
+        ValueError, substrates.mesh, vertices=vertices, faces="f", periodic=True,
+    )
+    npt.assert_raises(
+        ValueError,
+        substrates.mesh,
+        vertices=vertices,
+        faces=np.zeros(2).astype(int),
+        periodic=True,
+    )
+    npt.assert_raises(
+        ValueError,
+        substrates.mesh,
+        vertices=vertices,
+        faces=np.zeros((1, 4)).astype(int),
+        periodic=True,
+    )
+    npt.assert_raises(
+        ValueError,
+        substrates.mesh,
+        vertices=vertices,
+        faces=faces.astype(float),
+        periodic=True,
+    )
+    npt.assert_raises(
+        ValueError, substrates.mesh, vertices=vertices, faces=faces, periodic=1,
+    )
+    npt.assert_raises(
+        ValueError,
+        substrates.mesh,
+        vertices=vertices,
+        faces=faces,
+        periodic=True,
+        padding="p",
+    )
+    npt.assert_raises(
+        ValueError,
+        substrates.mesh,
+        vertices=vertices,
+        faces=faces,
+        periodic=True,
+        padding=np.zeros(2),
+    )
+    npt.assert_raises(
+        ValueError,
+        substrates.mesh,
+        vertices=vertices,
+        faces=faces,
+        periodic=True,
+        padding=np.ones(3).astype(int),
+    )
+    npt.assert_raises(
+        ValueError,
+        substrates.mesh,
+        vertices=vertices,
+        faces=faces,
+        periodic=True,
+        init_pos=np.zeros(1),
+    )
+    npt.assert_raises(
+        ValueError,
+        substrates.mesh,
+        vertices=vertices,
+        faces=faces,
+        periodic=True,
+        init_pos=np.zeros((1, 4)),
+    )
+    npt.assert_raises(
+        ValueError,
+        substrates.mesh,
+        vertices=vertices,
+        faces=faces,
+        periodic=True,
+        init_pos=np.zeros((1, 3)).astype(int),
+    )
+    npt.assert_raises(
+        ValueError,
+        substrates.mesh,
+        vertices=vertices,
+        faces=faces,
+        periodic=True,
+        init_pos="s",
+    )
+    npt.assert_raises(
+        ValueError,
+        substrates.mesh,
+        vertices=vertices,
+        faces=faces,
+        periodic=True,
+        n_sv="n",
+    )
+    npt.assert_raises(
+        ValueError,
+        substrates.mesh,
+        vertices=vertices,
+        faces=faces,
+        periodic=True,
+        n_sv=np.zeros((3, 3)),
+    )
+    npt.assert_raises(
+        ValueError,
+        substrates.mesh,
+        vertices=vertices,
+        faces=faces,
+        periodic=True,
+        n_sv=np.zeros((3)).astype(float),
+    )
+    substrate = substrates.mesh(vertices, faces, True)
+    npt.assert_equal(substrate.type, "mesh")
     return
 
 
 def test__cross_product():
-    a = np.array([0.77530597, 0.01563718, 0.78352089])
-    b = np.array([0.49369194, -0.14263695, 0.35284948])
-    npt.assert_equal(substrates._cross_product(a, b), np.cross(a, b))
+    np.random.seed(123)
+    for _ in range(100):
+        a = np.random.random(3) - 0.5
+        b = np.random.random(3) - 0.5
+        npt.assert_equal(substrates._cross_product(a, b), np.cross(a, b))
     return
 
 
 def test__dot_product():
-    a = np.array([0.77530597, 0.01563718, 0.78352089])
-    b = np.array([0.49369194, -0.14263695, 0.35284948])
-    npt.assert_equal(substrates._dot_product(a, b), np.dot(a, b))
+    np.random.seed(123)
+    for _ in range(100):
+        a = np.random.random(3) - 0.5
+        b = np.random.random(3) - 0.5
+        npt.assert_equal(substrates._dot_product(a, b), np.dot(a, b))
     return
 
 
@@ -165,10 +315,37 @@ def test__box_subvoxel_overlap():
 
 
 def test__mesh_space_subdivision():
-    # Test automatically
-    # AND
-    # Check the functionality manually by reconstructing the full mesh by
-    # looping over the subvoxels!
+    mesh_path = os.path.join(
+        os.path.dirname(substrates.__file__), "tests", "sphere_mesh.pkl",
+    )
+    with open(mesh_path, "rb") as f:
+        example_mesh = pickle.load(f)
+    faces = example_mesh["faces"]
+    vertices = example_mesh["vertices"]
+    voxel_size = np.max(vertices, axis=0)
+    n_sv = np.array([2, 5, 10])
+    xs, ys, zs, triangle_indices, subvoxel_indices = substrates._mesh_space_subdivision(
+        vertices, faces, voxel_size, n_sv
+    )
+    npt.assert_almost_equal(xs, np.linspace(0, voxel_size[0], n_sv[0] + 1))
+    npt.assert_almost_equal(ys, np.linspace(0, voxel_size[1], n_sv[1] + 1))
+    npt.assert_almost_equal(zs, np.linspace(0, voxel_size[2], n_sv[2] + 1))
+    desired_triangle_indices = np.load(
+        os.path.join(
+            os.path.dirname(substrates.__file__),
+            "tests",
+            "desired_triangle_indices.npy",
+        )
+    )
+    npt.assert_almost_equal(triangle_indices, desired_triangle_indices)
+    desired_subvoxel_indices = np.load(
+        os.path.join(
+            os.path.dirname(substrates.__file__),
+            "tests",
+            "desired_subvoxel_indices.npy",
+        )
+    )
+    npt.assert_almost_equal(subvoxel_indices, desired_subvoxel_indices)
     return
 
 

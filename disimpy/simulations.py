@@ -294,9 +294,7 @@ def _cuda_reflection(r0, step, d, normal, epsilon):
             normal[i] *= -1
         dp = _cuda_dot_product(v, normal)
     for i in range(3):
-        step[i] = (v[i] - 2 * dp * normal[i] + intersection[i]) - intersection[
-            i
-        ]
+        step[i] = (v[i] - 2 * dp * normal[i] + intersection[i]) - intersection[i]
     _cuda_normalize_vector(step)
     for i in range(3):  # Move walker slightly away from the surface
         r0[i] = intersection[i] + epsilon * normal[i]
@@ -378,48 +376,84 @@ def _initial_positions_ellipsoid(n_walkers, semiaxes, R):
 
 
 @cuda.jit()
-def _cuda_fill_mesh(points, rng_states, vertices, faces, voxel_size, intra):
-    """Sample points from a uniform distribution inside or outside the surface
-    defined by a triangular mesh.
+def _cuda_fill_mesh(
+    points,
+    rng_states,
+    intra,
+    vertices,
+    faces,
+    voxel_size,
+    triangle_indices,
+    subvoxel_indices,
+    xs,
+    ys,
+    zs,
+    n_sv,
+):
+    """Kernel function for efficiently sampling points from a uniform
+    distribution inside or outside the surface defined by the triangular
+    mesh."""
 
-    Parameters
-    ----------
-    points : numba.cuda.cudadrv.devicearray.DeviceNDArray
-    rng_states : numba.cuda.cudadrv.devicearray.DeviceNDArray
-    vertices : numba.cuda.cudadrv.devicearray.DeviceNDArray
-    faces : numba.cuda.cudadrv.devicearray.DeviceNDArray
-    voxel_size : numba.cuda.cudadrv.devicearray.DeviceNDArray
-    intra : bool
-
-    Returns
-    -------
-    None
-    """
     thread_id = cuda.grid(1)
     if thread_id >= points.shape[0] or points[thread_id, 0] != math.inf:
         return
+
     point = cuda.local.array(3, numba.float64)
     for i in range(3):
-        point[i] = (
-            xoroshiro128p_uniform_float64(rng_states, thread_id) * voxel_size[i]
-        )
+        point[i] = xoroshiro128p_uniform_float64(rng_states, thread_id) * voxel_size[i]
     ray = cuda.local.array(3, numba.float64)
-    _cuda_random_step(ray, rng_states, thread_id)
-    intersections = 0
+    ray[0] = 1.0
+    ray[1] = 0.0
+    ray[2] = 0.0
+
+    # Find the subvoxels the ray intersects
+    lls = cuda.local.array(3, numba.int64)
+    uls = cuda.local.array(3, numba.int64)
+    lls[0] = _ll_subvoxel_overlap(xs, point[0], point[0] + ray[0])
+    lls[1] = _ll_subvoxel_overlap(ys, point[1], point[1] + ray[1])
+    lls[2] = _ll_subvoxel_overlap(zs, point[2], point[2] + ray[2])
+    uls[0] = _ul_subvoxel_overlap(xs, point[0], point[0] + ray[0])
+    uls[1] = _ul_subvoxel_overlap(ys, point[1], point[1] + ray[1])
+    uls[2] = _ul_subvoxel_overlap(zs, point[2], point[2] + ray[2])
+
+    # Keep track of the number of intersections and the triangles. The max
+    # number of intersections allowed is 1000. Increase this number for very
+    # complex meshes.
+    n_intersections = 0
     triangle = cuda.local.array((3, 3), numba.float64)
-    for idx in faces:  # Loop over triangles
-        for i in range(3):
-            for j in range(3):
-                triangle[i, j] = vertices[idx[i], j]
-        t = _cuda_ray_triangle_intersection_check(triangle, point, ray)
-        if t > 0:
-            intersections += 1
+    triangles = cuda.local.array(1000, numba.int64)
+
+    # Loop over the subvoxels
+    for x in range(lls[0], uls[0]):
+        for y in range(lls[1], uls[1]):
+            for z in range(lls[2], uls[2]):
+                sv = int(x * n_sv[1] * n_sv[2] + y * n_sv[2] + z)
+
+                # Loop over the triangles
+                for i in range(subvoxel_indices[sv, 0], subvoxel_indices[sv, 1]):
+
+                    if n_intersections >= 1000:
+                        return
+
+                    _cuda_get_triangle(triangle_indices[i], vertices, faces, triangle)
+                    d = _cuda_ray_triangle_intersection_check(triangle, point, ray)
+
+                    if d > 0:
+                        already_intersected = False
+                        for j in triangles[0:n_intersections]:
+                            if j == triangle_indices[i]:
+                                already_intersected = True
+                                break
+                        if not already_intersected:
+                            triangles[n_intersections] = triangle_indices[i]
+                            n_intersections += 1
+
     if intra:
-        if intersections % 2 == 1:  # Point is inside the surface
+        if n_intersections % 2 == 1:  # Point is inside the surface
             for i in range(3):
                 points[thread_id, i] = point[i]
     else:
-        if intersections % 2 == 0:  # Point is outside the surface
+        if n_intersections % 2 == 0:  # Point is outside the surface
             for i in range(3):
                 points[thread_id, i] = point[i]
     return
@@ -445,22 +479,61 @@ def _fill_mesh(n_points, substrate, intra, seed, cuda_bs=128):
     gs = int(math.ceil(float(n_points) / bs))
     stream = cuda.stream()
     rng_states = create_xoroshiro128p_states(gs * bs, seed=seed, stream=stream)
-    points = np.ones((n_points, 3)).astype(np.float64) * math.inf
-    d_points = cuda.to_device(points, stream=stream)
+
     if substrate.periodic:
         d_vertices = cuda.to_device(substrate.vertices, stream=stream)
         d_faces = cuda.to_device(substrate.faces, stream=stream)
+        d_subvoxel_indices = cuda.to_device(substrate.subvoxel_indices, stream=stream)
+        d_triangle_indices = cuda.to_device(substrate.triangle_indices, stream=stream)
     else:  # Don't include the voxel boundaries
-        d_vertices = cuda.to_device(substrate.vertices[0:-8], stream=stream)
-        d_faces = cuda.to_device(substrate.faces[0:-12], stream=stream)
+        vertices = np.copy(substrate.vertices[0:-8])
+        faces = np.copy(substrate.faces[0:-12])
+        triangle_indices = np.copy(substrate.triangle_indices)
+        subvoxel_indices = np.copy(substrate.subvoxel_indices)
+        to_delete = np.where(triangle_indices >= len(faces))[0]
+        for n_deleted, i in enumerate(to_delete):
+            for j in range(subvoxel_indices.shape[0]):
+                if subvoxel_indices[j, 1] > i - n_deleted:
+                    subvoxel_indices[j, :] -= 1
+            triangle_indices = np.delete(triangle_indices, i - n_deleted)
+        subvoxel_indices[subvoxel_indices < 0] = 0
+        d_vertices = cuda.to_device(vertices, stream=stream)
+        d_faces = cuda.to_device(faces, stream=stream)
+        d_subvoxel_indices = cuda.to_device(subvoxel_indices, stream=stream)
+        d_triangle_indices = cuda.to_device(triangle_indices, stream=stream)
     d_voxel_size = cuda.to_device(substrate.voxel_size, stream=stream)
-    while np.any(np.isinf(points)):
+    d_xs = cuda.to_device(substrate.xs, stream=stream)
+    d_ys = cuda.to_device(substrate.ys, stream=stream)
+    d_zs = cuda.to_device(substrate.zs, stream=stream)
+    d_n_sv = cuda.to_device(substrate.n_sv, stream=stream)
+    points_sampled = False
+    points = np.array([])
+    while not points_sampled:
+        new_points = np.ones((n_points, 3)).astype(np.float64) * math.inf
+        d_points = cuda.to_device(new_points, stream=stream)
         _cuda_fill_mesh[gs, bs, stream](
-            d_points, rng_states, d_vertices, d_faces, d_voxel_size, intra
+            d_points,
+            rng_states,
+            intra,
+            d_vertices,
+            d_faces,
+            d_voxel_size,
+            d_triangle_indices,
+            d_subvoxel_indices,
+            d_xs,
+            d_ys,
+            d_zs,
+            d_n_sv,
         )
         stream.synchronize()
-        points = d_points.copy_to_host(stream=stream)
-    return points
+        new_points = d_points.copy_to_host(stream=stream)
+        if len(points) == 0:
+            points = new_points[~np.isinf(new_points)[:, 0]]
+        else:
+            points = np.vstack((points, new_points[~np.isinf(new_points)[:, 0]]))
+        if points.shape[0] >= n_points:
+            points_sampled = True
+    return points[0:n_points]
 
 
 def _aabb_to_mesh(a, b):
@@ -564,9 +637,7 @@ def _ul_subvoxel_overlap_periodic(xs, x1, x2):
 
 
 @cuda.jit()
-def _cuda_step_free(
-    positions, g_x, g_y, g_z, phases, rng_states, t, step_l, dt
-):
+def _cuda_step_free(positions, g_x, g_y, g_z, phases, rng_states, t, step_l, dt):
     """Kernel function for free diffusion."""
     thread_id = cuda.grid(1)
     if thread_id >= positions.shape[0]:
@@ -811,24 +882,12 @@ def _cuda_step_mesh(
         min_d = math.inf
 
         # Find the relevant subvoxels for this step
-        lls[0] = _ll_subvoxel_overlap_periodic(
-            xs, r0[0], r0[0] + step[0] * step_l
-        )
-        lls[1] = _ll_subvoxel_overlap_periodic(
-            ys, r0[1], r0[1] + step[1] * step_l
-        )
-        lls[2] = _ll_subvoxel_overlap_periodic(
-            zs, r0[2], r0[2] + step[2] * step_l
-        )
-        uls[0] = _ul_subvoxel_overlap_periodic(
-            xs, r0[0], r0[0] + step[0] * step_l
-        )
-        uls[1] = _ul_subvoxel_overlap_periodic(
-            ys, r0[1], r0[1] + step[1] * step_l
-        )
-        uls[2] = _ul_subvoxel_overlap_periodic(
-            zs, r0[2], r0[2] + step[2] * step_l
-        )
+        lls[0] = _ll_subvoxel_overlap_periodic(xs, r0[0], r0[0] + step[0] * step_l)
+        lls[1] = _ll_subvoxel_overlap_periodic(ys, r0[1], r0[1] + step[1] * step_l)
+        lls[2] = _ll_subvoxel_overlap_periodic(zs, r0[2], r0[2] + step[2] * step_l)
+        uls[0] = _ul_subvoxel_overlap_periodic(xs, r0[0], r0[0] + step[0] * step_l)
+        uls[1] = _ul_subvoxel_overlap_periodic(ys, r0[1], r0[1] + step[1] * step_l)
+        uls[2] = _ul_subvoxel_overlap_periodic(zs, r0[2], r0[2] + step[2] * step_l)
 
         # Loop over subvoxels and fnd the closest triangle
         for x in range(lls[0], uls[0]):
@@ -868,9 +927,7 @@ def _cuda_step_mesh(
                         temp_r0[i] = r0[i] - shifts[i]
 
                     # Loop over the triangles in this subvoxel
-                    for i in range(
-                        subvoxel_indices[sv, 0], subvoxel_indices[sv, 1]
-                    ):
+                    for i in range(subvoxel_indices[sv, 0], subvoxel_indices[sv, 1]):
                         _cuda_get_triangle(
                             triangle_indices[i], vertices, faces, triangle
                         )
@@ -883,9 +940,7 @@ def _cuda_step_mesh(
 
         # Check if step intersects with the closest triangle
         if min_d < step_l:
-            _cuda_get_triangle(
-                closest_triangle_index, vertices, faces, triangle
-            )
+            _cuda_get_triangle(closest_triangle_index, vertices, faces, triangle)
             _cuda_triangle_normal(triangle, normal)
             _cuda_reflection(r0, step, min_d, normal, epsilon)
             step_l -= min_d
@@ -1067,18 +1122,10 @@ def simulation(
     rng_states = create_xoroshiro128p_states(gs * bs, seed=seed, stream=stream)
 
     # Move arrays to the GPU
-    d_g_x = cuda.to_device(
-        np.ascontiguousarray(gradient[:, :, 0]), stream=stream
-    )
-    d_g_y = cuda.to_device(
-        np.ascontiguousarray(gradient[:, :, 1]), stream=stream
-    )
-    d_g_z = cuda.to_device(
-        np.ascontiguousarray(gradient[:, :, 2]), stream=stream
-    )
-    d_phases = cuda.to_device(
-        np.zeros((gradient.shape[0], n_walkers)), stream=stream
-    )
+    d_g_x = cuda.to_device(np.ascontiguousarray(gradient[:, :, 0]), stream=stream)
+    d_g_y = cuda.to_device(np.ascontiguousarray(gradient[:, :, 1]), stream=stream)
+    d_g_z = cuda.to_device(np.ascontiguousarray(gradient[:, :, 2]), stream=stream)
+    d_phases = cuda.to_device(np.zeros((gradient.shape[0], n_walkers)), stream=stream)
     d_iter_exc = cuda.to_device(np.zeros(n_walkers).astype(bool))
 
     # Calculate step length
@@ -1101,15 +1148,7 @@ def simulation(
         # Run simulation
         for t in range(gradient.shape[1]):
             _cuda_step_free[gs, bs, stream](
-                d_positions,
-                d_g_x,
-                d_g_y,
-                d_g_z,
-                d_phases,
-                rng_states,
-                t,
-                step_l,
-                dt,
+                d_positions, d_g_x, d_g_y, d_g_z, d_phases, rng_states, t, step_l, dt,
             )
             stream.synchronize()
             if traj:
@@ -1117,8 +1156,7 @@ def simulation(
                 _write_traj(traj, "a", positions)
             if not quiet:
                 print(
-                    str(np.round((t / gradient.shape[1]) * 100, 0)) + " %",
-                    end="\r",
+                    str(np.round((t / gradient.shape[1]) * 100, 0)) + " %", end="\r",
                 )
 
     elif substrate.type == "cylinder":
@@ -1128,9 +1166,7 @@ def simulation(
         R_inv = np.linalg.inv(R)
 
         # Calculate initial positions
-        positions = _initial_positions_cylinder(
-            n_walkers, substrate.radius, R_inv
-        )
+        positions = _initial_positions_cylinder(n_walkers, substrate.radius, R_inv)
         if traj:
             _write_traj(traj, "w", positions)
         d_positions = cuda.to_device(positions, stream=stream)
@@ -1160,8 +1196,7 @@ def simulation(
                 _write_traj(traj, "a", positions)
             if not quiet:
                 print(
-                    str(np.round((t / gradient.shape[1]) * 100, 0)) + " %",
-                    end="\r",
+                    str(np.round((t / gradient.shape[1]) * 100, 0)) + " %", end="\r",
                 )
 
     elif substrate.type == "sphere":
@@ -1195,8 +1230,7 @@ def simulation(
                 _write_traj(traj, "a", positions)
             if not quiet:
                 print(
-                    str(np.round((t / gradient.shape[1]) * 100, 0)) + " %",
-                    end="\r",
+                    str(np.round((t / gradient.shape[1]) * 100, 0)) + " %", end="\r",
                 )
 
     elif substrate.type == "ellipsoid":
@@ -1208,9 +1242,7 @@ def simulation(
         R = np.linalg.inv(R_inv)
 
         # Calculate initial positions
-        positions = _initial_positions_ellipsoid(
-            n_walkers, substrate.semiaxes, R_inv
-        )
+        positions = _initial_positions_ellipsoid(n_walkers, substrate.semiaxes, R_inv)
         if traj:
             _write_traj(traj, "w", positions)
         d_positions = cuda.to_device(positions, stream=stream)
@@ -1240,8 +1272,7 @@ def simulation(
                 _write_traj(traj, "a", positions)
             if not quiet:
                 print(
-                    str(np.round((t / gradient.shape[1]) * 100, 0)) + " %",
-                    end="\r",
+                    str(np.round((t / gradient.shape[1]) * 100, 0)) + " %", end="\r",
                 )
 
     elif substrate.type == "mesh":
@@ -1257,9 +1288,7 @@ def simulation(
             if not quiet:
                 print("Calculating initial positions")
             if substrate.init_pos == "uniform":
-                positions = (
-                    np.random.random((n_walkers, 3)) * substrate.voxel_size
-                )
+                positions = np.random.random((n_walkers, 3)) * substrate.voxel_size
             elif substrate.init_pos == "intra":
                 positions = _fill_mesh(n_walkers, substrate, True, seed)
             else:
@@ -1275,12 +1304,8 @@ def simulation(
         d_xs = cuda.to_device(substrate.xs, stream=stream)
         d_ys = cuda.to_device(substrate.ys, stream=stream)
         d_zs = cuda.to_device(substrate.zs, stream=stream)
-        d_triangle_indices = cuda.to_device(
-            substrate.triangle_indices, stream=stream
-        )
-        d_subvoxel_indices = cuda.to_device(
-            substrate.subvoxel_indices, stream=stream
-        )
+        d_triangle_indices = cuda.to_device(substrate.triangle_indices, stream=stream)
+        d_subvoxel_indices = cuda.to_device(substrate.subvoxel_indices, stream=stream)
         d_n_sv = cuda.to_device(substrate.n_sv, stream=stream)
         d_positions = cuda.to_device(positions, stream=stream)
 
@@ -1315,8 +1340,7 @@ def simulation(
                 _write_traj(traj, "a", positions)
             if not quiet:
                 print(
-                    str(np.round((t / gradient.shape[1]) * 100, 0)) + " %",
-                    end="\r",
+                    str(np.round((t / gradient.shape[1]) * 100, 0)) + " %", end="\r",
                 )
 
     else:

@@ -42,9 +42,7 @@ def test__cuda_dot_product():
         thread_id = cuda.grid(1)
         if thread_id >= a.shape[0]:
             return
-        dp[thread_id] = simulations._cuda_dot_product(
-            a[thread_id, :], b[thread_id, :]
-        )
+        dp[thread_id] = simulations._cuda_dot_product(a[thread_id, :], b[thread_id, :])
         return
 
     np.random.seed(123)
@@ -108,9 +106,7 @@ def test__cuda_triangle_normal():
         thread_id = cuda.grid(1)
         if thread_id >= triangle.shape[0]:
             return
-        simulations._cuda_triangle_normal(
-            triangle[thread_id, :], normal[thread_id, :]
-        )
+        simulations._cuda_triangle_normal(triangle[thread_id, :], normal[thread_id, :])
         return
 
     np.random.seed(123)
@@ -135,9 +131,7 @@ def test__cuda_random_step():
         thread_id = cuda.grid(1)
         if thread_id >= steps.shape[0]:
             return
-        simulations._cuda_random_step(
-            steps[thread_id, :], rng_states, thread_id
-        )
+        simulations._cuda_random_step(steps[thread_id, :], rng_states, thread_id)
         return
 
     N = int(1e5)
@@ -157,9 +151,7 @@ def test__cuda_random_step():
     npt.assert_almost_equal(np.mean(np.sum(steps[1::], axis=1) / N), 0, 3)
     _, p = normaltest(steps[1::].ravel())
     npt.assert_almost_equal(p, 0)
-    npt.assert_almost_equal(
-        np.linalg.norm(steps, axis=2), np.ones((len(seeds), N))
-    )
+    npt.assert_almost_equal(np.linalg.norm(steps, axis=2), np.ones((len(seeds), N)))
     return
 
 
@@ -291,11 +283,7 @@ def test__cuda_reflection():
         if thread_id >= r0.shape[0]:
             return
         simulations._cuda_reflection(
-            r0[thread_id, :],
-            step[thread_id, :],
-            d,
-            normal[thread_id, :],
-            epsilon,
+            r0[thread_id, :], step[thread_id, :], d, normal[thread_id, :], epsilon,
         )
         return
 
@@ -326,9 +314,7 @@ def test__cuda_reflection():
         r0 = r0[thread_id]
         step = step[thread_id]
         triangle = triangle[thread_id]
-        d = simulations._cuda_ray_triangle_intersection_check(
-            triangle, r0, step
-        )
+        d = simulations._cuda_ray_triangle_intersection_check(triangle, r0, step)
         if d > 0 and d < step_l:
             normal = cuda.local.array(3, numba.float64)
             simulations._cuda_triangle_normal(triangle, normal)
@@ -419,7 +405,7 @@ def test__initial_positions_ellipsoid():
 
 def test__fill_mesh():
 
-    n_s = int(1e5)
+    n_s = int(1e4)
 
     mesh_path = os.path.join(
         os.path.dirname(simulations.__file__), "tests", "sphere_mesh.pkl"
@@ -431,8 +417,8 @@ def test__fill_mesh():
 
     for n_sv in [
         np.array([1, 1, 1]),
+        np.array([1, 5, 20]),
         np.array([10, 10, 10]),
-        np.array([2, 5, 20]),
     ]:
 
         substrate = substrates.mesh(vertices, faces, n_sv=n_sv)
@@ -458,9 +444,7 @@ def test__fill_mesh():
         npt.assert_almost_equal(np.mean(points, axis=0), np.zeros(3))
 
     mesh_path = os.path.join(
-        os.path.dirname(simulations.__file__),
-        "tests",
-        "cylinder_mesh_closed.pkl",
+        os.path.dirname(simulations.__file__), "tests", "cylinder_mesh_closed.pkl",
     )
     with open(mesh_path, "rb") as f:
         example_mesh = pickle.load(f)
@@ -469,25 +453,19 @@ def test__fill_mesh():
 
     substrate = substrates.mesh(vertices, faces)
     points = simulations._fill_mesh(n_s, substrate, True, seed=123)
-    r = np.max(
-        np.linalg.norm(vertices[:, 0:2] - substrate.voxel_size[0:2] / 2, axis=1)
-    )
+    r = np.max(np.linalg.norm(vertices[:, 0:2] - substrate.voxel_size[0:2] / 2, axis=1))
     l = substrate.voxel_size[2]
     npt.assert_equal(np.min(points[:, 2]) > 0, True)
     npt.assert_equal(np.max(points[:, 2]) < l, True)
     npt.assert_equal(
         np.max(
-            np.linalg.norm(
-                points[:, 0:2] - np.max(vertices, axis=0)[0:2] / 2, axis=1
-            )
+            np.linalg.norm(points[:, 0:2] - np.max(vertices, axis=0)[0:2] / 2, axis=1)
         )
         < r,
         True,
     )
     points = simulations._fill_mesh(n_s, substrate, False, seed=123)
-    npt.assert_equal(
-        np.min(np.linalg.norm(points[:, 0:2] - r, axis=1)) / 0.9 > r, True
-    )
+    npt.assert_equal(np.min(np.linalg.norm(points[:, 0:2] - r, axis=1)) / 0.9 > r, True)
     return
 
 
@@ -564,9 +542,7 @@ def test_cylinder_diffusion():
     cylinder_substrate = substrates.cylinder(
         orientation=np.array([0, 0, 1.0]), radius=5e-6
     )
-    signals = simulations.simulation(
-        n_s, diffusivity, gradient, dt, cylinder_substrate
-    )
+    signals = simulations.simulation(n_s, diffusivity, gradient, dt, cylinder_substrate)
     misst_signals_path = os.path.join(
         os.path.dirname(gradients.__file__),
         "tests",
@@ -587,9 +563,7 @@ def test_cylinder_diffusion():
     cylinder_substrate = substrates.cylinder(
         orientation=np.array([0, 0, 1.0]), radius=5e-6
     )
-    signals = simulations.simulation(
-        n_s, diffusivity, gradient, dt, cylinder_substrate
-    )
+    signals = simulations.simulation(n_s, diffusivity, gradient, dt, cylinder_substrate)
     misst_signals_path = os.path.join(
         os.path.dirname(gradients.__file__),
         "tests",
@@ -606,25 +580,13 @@ def test_cylinder_diffusion():
     gradient = np.concatenate([gradient for _ in bs], axis=0)
     gradient, dt = gradients.interpolate_gradient(gradient, dt, n_t)
     gradient = gradients.set_b(gradient, dt, bs)
-    substrate = substrates.cylinder(
-        orientation=np.array([1.0, 0, 1.0]), radius=5e-6
-    )
-    signals_1 = simulations.simulation(
-        n_s, diffusivity, gradient, dt, substrate
-    )
-    substrate = substrates.cylinder(
-        orientation=-np.array([1.0, 0, 1.0]), radius=5e-6
-    )
-    signals_2 = simulations.simulation(
-        n_s, diffusivity, gradient, dt, substrate
-    )
+    substrate = substrates.cylinder(orientation=np.array([1.0, 0, 1.0]), radius=5e-6)
+    signals_1 = simulations.simulation(n_s, diffusivity, gradient, dt, substrate)
+    substrate = substrates.cylinder(orientation=-np.array([1.0, 0, 1.0]), radius=5e-6)
+    signals_2 = simulations.simulation(n_s, diffusivity, gradient, dt, substrate)
     npt.assert_almost_equal(signals_1 / n_s, signals_2 / n_s)
-    substrate = substrates.cylinder(
-        orientation=-np.array([1.0, 0, 0]), radius=5e-6
-    )
-    signals_3 = simulations.simulation(
-        n_s, diffusivity, gradient, dt, substrate
-    )
+    substrate = substrates.cylinder(orientation=-np.array([1.0, 0, 0]), radius=5e-6)
+    signals_3 = simulations.simulation(n_s, diffusivity, gradient, dt, substrate)
     npt.assert_almost_equal(signals_3 / n_s, np.exp(-bs * diffusivity), 2)
     return
 
@@ -664,9 +626,7 @@ def test_sphere_diffusion():
     gradient, dt = gradients.interpolate_gradient(gradient, dt, n_t)
     gradient = gradients.set_b(gradient, dt, bs)
     cylinder_substrate = substrates.sphere(radius=5e-6)
-    signals = simulations.simulation(
-        n_s, diffusivity, gradient, dt, cylinder_substrate
-    )
+    signals = simulations.simulation(n_s, diffusivity, gradient, dt, cylinder_substrate)
     misst_signals_path = os.path.join(
         os.path.dirname(gradients.__file__),
         "tests",
@@ -685,9 +645,7 @@ def test_sphere_diffusion():
     gradient, dt = gradients.interpolate_gradient(gradient, dt, n_t)
     gradient = gradients.set_b(gradient, dt, bs)
     cylinder_substrate = substrates.sphere(radius=5e-6)
-    signals = simulations.simulation(
-        n_s, diffusivity, gradient, dt, cylinder_substrate
-    )
+    signals = simulations.simulation(n_s, diffusivity, gradient, dt, cylinder_substrate)
     misst_signals_path = os.path.join(
         os.path.dirname(gradients.__file__),
         "tests",
@@ -722,9 +680,7 @@ def test_ellipsoid_diffusion():
 
     # Compare signal to a sphere
     substrate = substrates.sphere(radius)
-    signals_sphere = simulations.simulation(
-        n_s, diffusivity, gradient, dt, substrate
-    )
+    signals_sphere = simulations.simulation(n_s, diffusivity, gradient, dt, substrate)
     npt.assert_almost_equal(signals, signals_sphere)
     return
 
@@ -736,9 +692,7 @@ def test_mesh_diffusion():
     diffusivity = 2e-9
 
     mesh_path = os.path.join(
-        os.path.dirname(simulations.__file__),
-        "tests",
-        "cylinder_mesh_closed.pkl",
+        os.path.dirname(simulations.__file__), "tests", "cylinder_mesh_closed.pkl",
     )
     with open(mesh_path, "rb") as f:
         example_mesh = pickle.load(f)
@@ -781,8 +735,7 @@ def test_mesh_diffusion():
     npt.assert_equal(
         np.max(
             np.linalg.norm(
-                pos[:, 0:2] - np.max(substrate.vertices, axis=0)[0:2] / 2,
-                axis=1,
+                pos[:, 0:2] - np.max(substrate.vertices, axis=0)[0:2] / 2, axis=1,
             )
         )
         < r,
@@ -791,18 +744,14 @@ def test_mesh_diffusion():
 
     # Test periodic boundary conditions
     mesh_path = os.path.join(
-        os.path.dirname(simulations.__file__),
-        "tests",
-        "cylinder_mesh_open.pkl",
+        os.path.dirname(simulations.__file__), "tests", "cylinder_mesh_open.pkl",
     )
     with open(mesh_path, "rb") as f:
         example_mesh = pickle.load(f)
     faces = example_mesh["faces"]
     vertices = example_mesh["vertices"]
     init_pos = np.zeros((n_s, 3)) + np.array([5e-6, 5e-6, 12.5e-6])
-    substrate = substrates.mesh(
-        vertices, faces, init_pos=init_pos, periodic=True
-    )
+    substrate = substrates.mesh(vertices, faces, init_pos=init_pos, periodic=True)
     signals, pos = simulations.simulation(
         n_s, diffusivity, gradient, dt, substrate, final_pos=True
     )
@@ -817,8 +766,7 @@ def test_mesh_diffusion():
     npt.assert_equal(
         np.max(
             np.linalg.norm(
-                pos[:, 0:2] - np.max(substrate.vertices, axis=0)[0:2] / 2,
-                axis=1,
+                pos[:, 0:2] - np.max(substrate.vertices, axis=0)[0:2] / 2, axis=1,
             )
         )
         < r,

@@ -13,8 +13,8 @@ If you already have a well-defined idea or want to make small changes (fix
 typos, improve code style, etc.), please fork the repository, create a branch
 with a descriptive name, make the necessary changes, and create a pull request.
 
-All code should aim to comply with `PEP8 <https://www.python.org/dev/peps/pep-0008/>`_
-and be documented following the `Numpy docstring conventions
+All code should be formatted with `Black <https://github.com/psf/black>`_ using
+the default settings and documented following the `Numpy docstring conventions
 <https://numpydoc.readthedocs.io/en/latest/format.html>`_ (except trivial
 internal functions). The functions should also have unit tests in the
 corresponding test module. It is important to make sure that your changes have

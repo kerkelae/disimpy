@@ -26,7 +26,7 @@ class _Substrate:
             self.init_pos = kwargs["init_pos"]
             self.n_sv = kwargs["n_sv"]
             if not kwargs["quiet"]:
-                print("Dividing mesh into subvoxels")
+                print("Dividing the mesh into subvoxels")
             (
                 self.xs,
                 self.ys,
@@ -37,7 +37,7 @@ class _Substrate:
                 self.vertices, self.faces, self.voxel_size, self.n_sv
             )
             if not kwargs["quiet"]:
-                print("Dividing mesh into subvoxels")
+                print("Finished dividing the mesh into subvoxels")
 
 
 def free():

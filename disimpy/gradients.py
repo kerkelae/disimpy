@@ -12,6 +12,46 @@ import scipy.integrate
 GAMMA = 267.513e6  # Gyromagnetic ratio of the simulated spins
 
 
+def _cumtrapz(y, dx, axis, initial):
+    """Cumulatively integrate y(x) using the composite trapezoidal rule.
+    
+    Parameters
+    ----------
+    y : numpy.ndarray
+        Values to integrate.
+    dx : float
+        Spacing between elements of `y`.
+    axis : int
+        Specifies the axis to cumulate. 
+    initial : scalar
+        Insert this value at the beginning of the returned result.
+
+    Returns
+    -------
+    res : numpy.ndarray
+        The result of cumulative integration of `y` along `axis`.
+    """
+
+    # This code is directly copied from Scipy so that it can be removed from
+    # dependencies
+
+    def tupleset(t, i, value):
+        l = list(t)
+        l[i] = value
+        return tuple(l)
+
+    y = np.asarray(y)
+    d = dx
+    nd = len(y.shape)
+    slice1 = tupleset((slice(None),) * nd, axis, slice(1, None))
+    slice2 = tupleset((slice(None),) * nd, axis, slice(None, -1))
+    res = np.cumsum(d * (y[slice1] + y[slice2]) / 2.0, axis=axis)
+    shape = list(res.shape)
+    shape[axis] = 1
+    res = np.concatenate([np.full(shape, initial, dtype=res.dtype), res], axis=axis)
+    return res
+
+
 def interpolate_gradient(gradient, dt, n_t):
     """Interpolate the gradient array to have n_t time points.
 
@@ -67,7 +107,7 @@ def calc_q(gradient, dt):
     q : numpy.ndarray
         q-vector array.
     """
-    q = GAMMA * scipy.integrate.cumtrapz(gradient, axis=1, dx=dt, initial=0)
+    q = GAMMA * _cumtrapz(gradient, axis=1, dx=dt, initial=0)
     return q
 
 

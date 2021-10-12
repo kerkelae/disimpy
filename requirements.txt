@@ -2,4 +2,3 @@ matplotlib
 numba==0.53.0
 numpy
 pytest
-scipy

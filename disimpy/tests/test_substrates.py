@@ -231,7 +231,7 @@ def test__cross_product():
     for _ in range(100):
         a = np.random.random(3) - 0.5
         b = np.random.random(3) - 0.5
-        npt.assert_equal(substrates._cross_product(a, b), np.cross(a, b))
+        npt.assert_almost_equal(substrates._cross_product(a, b), np.cross(a, b))
     return
 
 
@@ -240,7 +240,7 @@ def test__dot_product():
     for _ in range(100):
         a = np.random.random(3) - 0.5
         b = np.random.random(3) - 0.5
-        npt.assert_equal(substrates._dot_product(a, b), np.dot(a, b))
+        npt.assert_almost_equal(substrates._dot_product(a, b), np.dot(a, b))
     return
 
 

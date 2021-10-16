@@ -2,12 +2,13 @@
 Contributing
 ************
 
-We warmly welcome contributions to Disimpy from other scientists and developers.
+We warmly welcome contributions to Disimpy from other scientists and
+developers.
 
-If you want to discuss ideas before writing code, please start by opening an
-`issue on GitHub <https://github.com/kerkelae/disimpy/issues>`_ and we'll help
-you get started. Creating issues is also a great way to inform us about any bugs
-or problems you may encounter.
+If you want to discuss ideas before writing code, please open an `issue on
+GitHub <https://github.com/kerkelae/disimpy/issues>`_ and we'll help you get
+started. Creating issues is also a great way to inform us about any bugs or
+problems you may encounter.
 
 If you already have a well-defined idea or want to make small changes (fix
 typos, improve code style, etc.), please fork the repository, create a branch
@@ -26,12 +27,14 @@ not broken anything by running all tests with:
    disimpy.tests.test_all()
 
 If you make changes to the documentation, you should build it locally to
-confirm that it works as expected by executing the following in the
-``disimpy/docs`` directory. ::
+confirm that it works as expected by executing the following in
+``disimpy/docs``:
+
+.. code-block::
 
     make clean
     make html
 
-This will generate a local copy of the documentation in the directory
+This will generate a local copy of the documentation in
 ``disimpy/docs/_build/html``. Once the changes are merged with the master
 branch, the online documentation is automatically updated.

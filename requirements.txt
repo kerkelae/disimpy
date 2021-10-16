@@ -1,4 +1,4 @@
 matplotlib
-numba==0.53.0
+numba
 numpy
 pytest

@@ -1,5 +1,7 @@
 """This module contains general useful functions."""
 
+import warnings
+
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
@@ -86,21 +88,25 @@ def show_mesh(substrate, alpha=0.5):
     alpha : float
         Parameter controlling the triangle transparency.
     """
-    np.random.seed(123)
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection="3d")
-    for idx in substrate.faces:
-        tri = Poly3DCollection(substrate.vertices[idx], alpha=alpha)
-        face_color = np.random.random(3)
-        tri.set_facecolor(face_color)
-        ax.add_collection3d(tri)
-    ax.set_xlim([0, substrate.voxel_size[0]])
-    ax.set_ylim([0, substrate.voxel_size[1]])
-    ax.set_zlim([0, substrate.voxel_size[2]])
-    ax.set_xlabel("x")
-    ax.set_ylabel("y")
-    ax.set_zlabel("z")
-    ax.ticklabel_format(style="sci", scilimits=(0, 0))
-    fig.tight_layout()
-    plt.show()
+    with warnings.catch_warnings():
+        # The code below often resulted in a runtime warning so ignore warnings
+        # as a temporary solution
+        warnings.simplefilter("ignore")
+        np.random.seed(123)
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection="3d")
+        for idx in substrate.faces:
+            tri = Poly3DCollection(substrate.vertices[idx], alpha=alpha)
+            face_color = np.random.random(3)
+            tri.set_facecolor(face_color)
+            ax.add_collection3d(tri)
+        ax.set_xlim([0, substrate.voxel_size[0]])
+        ax.set_ylim([0, substrate.voxel_size[1]])
+        ax.set_zlim([0, substrate.voxel_size[2]])
+        ax.set_xlabel("x")
+        ax.set_ylabel("y")
+        ax.set_zlabel("z")
+        ax.ticklabel_format(style="sci", scilimits=(0, 0))
+        fig.tight_layout()
+        plt.show()
     return

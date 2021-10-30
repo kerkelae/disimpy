@@ -1164,6 +1164,8 @@ def simulation(
         # Calculate rotation from lab frame to cylinder frame and back
         R = utils.vec2vec_rotmat(substrate.orientation, np.array([1.0, 0, 0]))
         R_inv = np.linalg.inv(R)
+        d_R = cuda.to_device(R)
+        d_R_inv = cuda.to_device(R_inv)
 
         # Calculate initial positions
         positions = _initial_positions_cylinder(n_walkers, substrate.radius, R_inv)
@@ -1184,8 +1186,8 @@ def simulation(
                 step_l,
                 dt,
                 substrate.radius,
-                R,
-                R_inv,
+                d_R,
+                d_R_inv,
                 d_iter_exc,
                 max_iter,
                 epsilon,
@@ -1239,7 +1241,8 @@ def simulation(
 
         # Calculate rotation from ellipsoid frame to lab frame and back
         R_inv = substrate.R
-        R = np.linalg.inv(R_inv)
+        d_R_inv = cuda.to_device(R_inv)
+        d_R = cuda.to_device(np.linalg.inv(R_inv))
 
         # Calculate initial positions
         positions = _initial_positions_ellipsoid(n_walkers, substrate.semiaxes, R_inv)
@@ -1260,8 +1263,8 @@ def simulation(
                 step_l,
                 dt,
                 d_semiaxes,
-                R,
-                R_inv,
+                d_R,
+                d_R_inv,
                 d_iter_exc,
                 max_iter,
                 epsilon,

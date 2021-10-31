@@ -1,4 +1,4 @@
-"""This module contains code for executing diffusion-weighted MR simulations."""
+"""This module contains code for running diffusion-weighted MR simulations."""
 
 import os
 import time
@@ -152,8 +152,8 @@ def _cuda_mat_mul(R, v):
 
 @cuda.jit(device=True)
 def _cuda_line_circle_intersection(r0, step, radius):
-    """Calculate the distance from r0 to a circle centered at origin along step.
-    r0 must be inside the circle.
+    """Calculate the distance from r0 to a circle centered at origin along
+    step. r0 must be inside the circle.
 
     Parameters
     ----------
@@ -174,8 +174,8 @@ def _cuda_line_circle_intersection(r0, step, radius):
 
 @cuda.jit(device=True)
 def _cuda_line_sphere_intersection(r0, step, radius):
-    """Calculate the distance from r0 to a sphere centered at origin along step.
-    r0 must be inside the sphere.
+    """Calculate the distance from r0 to a sphere centered at origin along
+    step. r0 must be inside the sphere.
 
     Parameters
     ----------
@@ -225,8 +225,8 @@ def _cuda_line_ellipsoid_intersection(r0, step, semiaxes):
 def _cuda_ray_triangle_intersection_check(triangle, r0, step):
     """Check if a ray defined by r0 and step intersects with a triangle defined
     by A, B, and C. The output is the distance in units of step length from r0
-    to intersection if intersection found, nan otherwise. This function is based
-    on the Moller-Trumbore algorithm.
+    to intersection if intersection found, nan otherwise. This function is
+    based on the Moller-Trumbore algorithm.
 
     Parameters
     ----------
@@ -342,8 +342,8 @@ def _fill_sphere(n, radius):
 
 @numba.jit(nopython=True)
 def _fill_ellipsoid(n, semiaxes):
-    """Sample n random points from a uniform distribution inside an axis aligned
-    ellipsoid with semi-axes a, b, and c."""
+    """Sample n random points from a uniform distribution inside an axis
+    aligned ellipsoid with semi-axes a, b, and c."""
     filled = False
     points = np.zeros((n, 3))
     i = 0
@@ -359,7 +359,8 @@ def _fill_ellipsoid(n, semiaxes):
 
 def _initial_positions_cylinder(n_walkers, radius, R):
     """Calculate initial positions for spins in a cylinder whose orientation is
-    defined by R which defines the rotation from cylinder frame to lab frame."""
+    defined by R which defines the rotation from cylinder frame to lab
+    frame."""
     positions = np.zeros((n_walkers, 3))
     positions[:, 1:3] = _fill_circle(n_walkers, radius)
     positions = np.matmul(R, positions.T).T
@@ -537,8 +538,8 @@ def _fill_mesh(n_points, substrate, intra, seed, cuda_bs=128):
 
 
 def _aabb_to_mesh(a, b):
-    """Return a triangular mesh that corresponds to an axis-aligned bounding box
-    defined by points a and b."""
+    """Return a triangular mesh that corresponds to an axis-aligned bounding
+    box defined by points a and b."""
     vertices = np.array(
         [
             [a[0], a[1], a[2]],
@@ -1051,11 +1052,11 @@ def simulation(
     cuda_bs : int, optional
         The size of the one-dimensional CUDA thread block.
     max_iter : int, optional
-        The maximum number of iterations allowed in the algorithm that checks if
-        a random walker collides with a surface during a time step.
+        The maximum number of iterations allowed in the algorithm that checks
+        if a random walker collides with a surface during a time step.
     epsilon : float, optional
-        The amount by which a random walker is moved away from the surface after
-        a collision to avoid placing it in the surface.
+        The amount by which a random walker is moved away from the surface
+        after a collision to avoid placing it in the surface.
 
     Returns
     -------

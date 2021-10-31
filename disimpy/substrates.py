@@ -523,8 +523,8 @@ def _mesh_space_subdivision(vertices, faces, voxel_size, n_sv):
 
 
 def _aabb_to_mesh(a, b):
-    """Return a triangular mesh that corresponds to an axis-aligned bounding box
-    defined by points a and b."""
+    """Return a triangular mesh that corresponds to an axis-aligned bounding
+    box defined by points a and b."""
     vertices = np.array(
         [
             [a[0], a[1], a[2]],

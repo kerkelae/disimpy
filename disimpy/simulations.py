@@ -74,12 +74,16 @@ def _cuda_normalize_vector(v):
 
 @cuda.jit(device=True)
 def _cuda_triangle_normal(triangle, normal):
-    """Calculate a normal vector of a triangle.
+    """Calculate the normal vector of a triangle.
 
     Parameters
     ----------
     triangle : numba.cuda.cudadrv.devicearray.DeviceNDArray
     normal : numba.cuda.cudadrv.devicearray.DeviceNDArray
+
+    Returns
+    -------
+    None
     """
     v = cuda.local.array(3, numba.float64)
     k = cuda.local.array(3, numba.float64)
@@ -101,6 +105,10 @@ def _cuda_get_triangle(i, vertices, faces, triangle):
     vertices : numba.cuda.cudadrv.devicearray.DeviceNDArray
     faces : numba.cuda.cudadrv.devicearray.DeviceNDArray
     triangle : numba.cuda.cudadrv.devicearray.DeviceNDArray
+
+    Returns
+    -------
+    None
     """
     for a in range(3):
         for b in range(3):
@@ -236,7 +244,7 @@ def _cuda_ray_triangle_intersection_check(triangle, r0, step):
 
     Returns
     -------
-    float
+    float or nan
     """
     A = triangle[0]
     B = triangle[1]
@@ -302,7 +310,7 @@ def _cuda_reflection(r0, step, d, normal, epsilon):
 
 
 @numba.jit(nopython=True)
-def set_seed(seed):
+def _set_seed(seed):
     """Set the pseudorandom number generator seed for compiled functions."""
     np.random.seed(seed)
     return
@@ -1119,7 +1127,7 @@ def simulation(
 
     # Set seed and create PRNG states
     np.random.seed(seed)
-    set_seed(seed)
+    _set_seed(seed)
     rng_states = create_xoroshiro128p_states(gs * bs, seed=seed, stream=stream)
 
     # Move arrays to the GPU
@@ -1157,7 +1165,7 @@ def simulation(
                 _write_traj(traj, "a", positions)
             if not quiet:
                 print(
-                    str(np.round((t / gradient.shape[1]) * 100, 0)) + " %", end="\r",
+                    f"\r{np.round((t / gradient.shape[1]) * 100, 0)}%", end="",
                 )
 
     elif substrate.type == "cylinder":
@@ -1199,7 +1207,7 @@ def simulation(
                 _write_traj(traj, "a", positions)
             if not quiet:
                 print(
-                    str(np.round((t / gradient.shape[1]) * 100, 0)) + " %", end="\r",
+                    f"\r{np.round((t / gradient.shape[1]) * 100, 0)}%", end="",
                 )
 
     elif substrate.type == "sphere":
@@ -1233,7 +1241,7 @@ def simulation(
                 _write_traj(traj, "a", positions)
             if not quiet:
                 print(
-                    str(np.round((t / gradient.shape[1]) * 100, 0)) + " %", end="\r",
+                    f"\r{np.round((t / gradient.shape[1]) * 100, 0)}%", end="",
                 )
 
     elif substrate.type == "ellipsoid":
@@ -1276,7 +1284,7 @@ def simulation(
                 _write_traj(traj, "a", positions)
             if not quiet:
                 print(
-                    str(np.round((t / gradient.shape[1]) * 100, 0)) + " %", end="\r",
+                    f"\r{np.round((t / gradient.shape[1]) * 100, 0)}%", end="",
                 )
 
     elif substrate.type == "mesh":
@@ -1344,7 +1352,7 @@ def simulation(
                 _write_traj(traj, "a", positions)
             if not quiet:
                 print(
-                    str(np.round((t / gradient.shape[1]) * 100, 0)) + " %", end="\r",
+                    f"\r{np.round((t / gradient.shape[1]) * 100, 0)}%", end="",
                 )
 
     else:
@@ -1368,7 +1376,7 @@ def simulation(
         phases[:, np.where(iter_exc)[0]] = np.nan
         signals = np.real(np.nansum(np.exp(1j * phases), axis=1))
     if not quiet:
-        print("Simulation finished")
+        print("\rSimulation finished")
     if final_pos:
         positions = d_positions.copy_to_host(stream=stream)
         return signals, positions

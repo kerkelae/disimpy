@@ -5,7 +5,7 @@ with open("requirements.txt") as f:
 
 setup(
     name="disimpy",
-    version="0.1.2",
+    version="0.1.2dev",
     description="Massively parallel diffusion MR simulator",
     url="https://github.com/kerkelae/disimpy",
     license="MIT",

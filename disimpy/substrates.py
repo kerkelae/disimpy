@@ -1,5 +1,8 @@
-"""This module contains code for substrate objects that store information
-about the simulated microstructure."""
+"""This module contains code for creating substrate objects.
+
+Substrate objects are used for storing information about the simulated
+microstructure.
+"""
 
 import numpy as np
 import numba
@@ -78,7 +81,7 @@ def cylinder(radius, orientation):
     radius : float
         Radius of the cylinder.
     orientation : numpy.ndarray
-        Floating-point arrray of shape (3,) defining the orientation of the
+        Floating-point arrray with shape (3,) defining the orientation of the
         cylinder.
 
     Returns
@@ -105,10 +108,10 @@ def ellipsoid(semiaxes, R=np.eye(3)):
     Parameters
     ----------
     semiaxes : numpy.ndarray
-        Floating-point array of shape (3,) containing the semiaxes of the
+        Floating-point array with shape (3,) containing the semiaxes of the
         axis-aligned ellipsoid.
     R : numpy.ndarray, optional
-        Floating-point array of shape (3, 3) containing the rotation matrix
+        Floating-point array with shape (3, 3) containing the rotation matrix
         that is applied to the axis-aligned ellipsoid before the simulation.
 
     Returns
@@ -153,10 +156,10 @@ def mesh(
     Parameters
     ----------
     vertices : numpy.ndarray
-        Floating-point array of shape (number of vertices, 3) containing the
+        Floating-point array with shape (number of vertices, 3) containing the
         vertices of the triangular mesh.
     faces : numpy ndarray
-        Integer array of shape (number of triangles, 3) containing the vertex
+        Integer array with shape (number of triangles, 3) containing the vertex
         indices of the points of the triangles.
     periodic : bool, optional
         If True, periodic boundary conditions are used, i.e., the random
@@ -164,11 +167,11 @@ def mesh(
         copies of the simulated voxel. If False, the boundaries of the
         simulated voxel are an impermeable surface.
     padding : np.ndarray, optional
-        Floating-point array of shape (3,) defining how much empty space there
-        is between the axis-aligned bounding box of the triangles and the
+        Floating-point array with shape (3,) defining how much empty space
+        there is between the axis-aligned bounding box of the triangles and the
         boundaries of the simulated voxel on both sides along each axis.
     init_pos : numpy.ndarray or str, optional
-        Floating-point array of shape (number of random walkers, 3) defining
+        Floating-point array with shape (number of random walkers, 3) defining
         the initial position of the random walkers within the simulated voxel
         or one of the following strings: 'uniform', 'intra', or 'extra'. If
         'uniform', the initial positions are sampled from a uniform
@@ -180,7 +183,7 @@ def mesh(
         the triangles must define a closed surface if 'intra' or 'extra' is
         used.
     n_sv : np.ndarray, optional
-        Integer array of shape (3,) controlling the number of subvoxels into
+        Integer array with shape (3,) controlling the number of subvoxels into
         which the simulated voxel is divided to accelerate the collision check
         algorithm.
     quiet : bool, optional
@@ -280,10 +283,10 @@ def _triangle_box_overlap(triangle, box):
     Parameters
     ----------
     triangle : numpy.ndarray
-        Array of shape (3, 3) where the first dimension corresponds to the
+        Array with shape (3, 3) where the first dimension corresponds to the
         points of the triangle.
     box : numpy.ndarray
-        Array of shape (2, 3) so that box[0, :] and box[1, :] are the corners
+        Array with shape (2, 3) so that box[0, :] and box[1, :] are the corners
         closest to and furthest from the origin.
 
     Returns
@@ -304,7 +307,7 @@ def _triangle_box_overlap(triangle, box):
 
     # Test the triangle AABB against the box
     box_aabb = np.array(
-        [[np.min(v[:, i]) for i in range(3)], [np.max(v[:, i]) for i in range(3)],]
+        [[np.min(v[:, i]) for i in range(3)], [np.max(v[:, i]) for i in range(3)]]
     )
     if np.all(box_aabb[0] > h) or np.all(box_aabb[1] < -h):
         return False
@@ -413,7 +416,7 @@ def _triangle_aabb(triangle):
     Parameters
     ----------
     triangle : numpy.ndarray
-        Array of shape (3, 3) where the first dimension corresponds to the
+        Array with shape (3, 3) where the first dimension corresponds to the
         points of the triangle.
 
     Returns
@@ -435,7 +438,7 @@ def _box_subvoxel_overlap(box, xs, ys, zs):
     Parameters
     ----------
     box : numpy.ndarray
-        Array of shape (2, 3) so that box[0, :] and box[1, :] are the corners
+        Array with shape (2, 3) so that box[0, :] and box[1, :] are the corners
         closest to and furthest from the origin.
     xs, ys, zs : numpy.ndarray
         Subvoxel boundaries along each axis.
@@ -457,13 +460,13 @@ def _mesh_space_subdivision(vertices, faces, voxel_size, n_sv):
     Parameters
     ----------
     vertices : numpy.ndarray
-        Floating-point array of shape (number of vertices, 3) containing the
+        Floating-point array with shape (number of vertices, 3) containing the
         vertices of the triangular mesh.
     faces : numpy ndarray
-        Integer array of shape (number of triangles, 3) containing the vertex
+        Integer array with shape (number of triangles, 3) containing the vertex
         indices of the points of the triangles.
     voxel_size : numpy.ndarray
-        Floating-point array of shape (3,).
+        Floating-point array with shape (3,).
     n_sv : numpy.ndarray
         Integer array of size (3,) defining the number of subvoxels along each
         axis.
@@ -471,13 +474,13 @@ def _mesh_space_subdivision(vertices, faces, voxel_size, n_sv):
     Returns
     -------
     xs : numpy.ndarray
-        Floating-point array of shape (n_sv[0],) containing the subvoxel
+        Floating-point array with shape (n_sv[0],) containing the subvoxel
         boundaries along the x-axis.
     ys : numpy.ndarray
-        Floating-point array of shape (n_sv[1],) containing the subvoxel
+        Floating-point array with shape (n_sv[1],) containing the subvoxel
         boundaries along the y-axis.
     zs : numpy.ndarray
-        Floating-point array of shape (n_sv[2],) containing the subvoxel
+        Floating-point array with shape (n_sv[2],) containing the subvoxel
         boundaries along the z-axis.
     triangle_indices : numpy.ndarray
         One-dimensional integer array containing the triangle indices for all
@@ -502,7 +505,7 @@ def _mesh_space_subdivision(vertices, faces, voxel_size, n_sv):
             for y in range(subvoxels[1, 0], subvoxels[1, 1]):
                 for z in range(subvoxels[2, 0], subvoxels[2, 1]):
                     box = np.array(
-                        [[xs[x], ys[y], zs[z]], [xs[x + 1], ys[y + 1], zs[z + 1]],]
+                        [[xs[x], ys[y], zs[z]], [xs[x + 1], ys[y + 1], zs[z + 1]]]
                     )
                     if _triangle_box_overlap(triangle, box):
                         subvoxel = x * n_sv[1] * n_sv[2] + y * n_sv[2] + z

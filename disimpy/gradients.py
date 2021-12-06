@@ -1,12 +1,11 @@
 """This module contains code for creating and manipulating gradient arrays.
 
-Gradient arrays are numpy.ndarray instances of shape (number of measurements,
+Gradient arrays are numpy.ndarray instances with shape (number of measurements,
 number of time points, 3). Gradient array elements are floats representing the
 gradient magnitude in SI units (T/m).
 """
 
 import numpy as np
-import scipy.integrate
 
 
 GAMMA = 267.513e6  # Gyromagnetic ratio of the simulated spins

@@ -16,15 +16,6 @@ from numba.cuda.random import (
 from .. import gradients, simulations, substrates, utils
 
 
-def load_example_gradient():
-    T = 80e-3
-    gradient = np.zeros((1, 100, 3))
-    gradient[0, 1:11, 0] = 1
-    gradient[0, -11:-1, 0] = -1
-    dt = T / (gradient.shape[1] - 1)
-    return gradient, dt
-
-
 def test__cuda_dot_product():
     @cuda.jit()
     def test_kernel(a, b, dp):
@@ -393,9 +384,7 @@ def test__initial_positions_ellipsoid():
 
 
 def test__fill_mesh():
-
     n_s = int(1e4)
-
     mesh_path = os.path.join(
         os.path.dirname(simulations.__file__), "tests", "sphere_mesh.pkl"
     )
@@ -403,7 +392,6 @@ def test__fill_mesh():
         example_mesh = pickle.load(f)
     faces = example_mesh["faces"]
     vertices = example_mesh["vertices"]
-
     for n_sv in [
         np.array([1, 1, 1]),
         np.array([1, 5, 20]),
@@ -424,8 +412,16 @@ def test__fill_mesh():
                 points -= r + padding
                 npt.assert_equal(np.min(np.linalg.norm(points, axis=1)) > 0.9 * r, True)
                 npt.assert_almost_equal(np.mean(points, axis=0), np.zeros(3))
-
     return
+
+
+def create_example_gradient():
+    T = 80e-3
+    gradient = np.zeros((1, 100, 3))
+    gradient[0, 1:11, 0] = 1
+    gradient[0, -11:-1, 0] = -1
+    dt = T / (gradient.shape[1] - 1)
+    return gradient, dt
 
 
 def test_free_diffusion():
@@ -434,7 +430,7 @@ def test_free_diffusion():
     n_s = int(1e5)
     n_t = int(1e3)
     diffusivity = 2e-9
-    gradient, dt = load_example_gradient()
+    gradient, dt = create_example_gradient()
     bs = np.linspace(1, 2e9, 100)
     gradient = np.concatenate([gradient for _ in bs], axis=0)
     gradient, dt = gradients.interpolate_gradient(gradient, dt, n_t)
@@ -446,7 +442,7 @@ def test_free_diffusion():
     # Walker trajectories
     n_s = int(1e4)
     n_t = int(1e2)
-    gradient, dt = load_example_gradient()
+    gradient, dt = create_example_gradient()
     gradient, dt = gradients.interpolate_gradient(gradient, dt, n_t)
     traj_file = os.path.join(
         os.path.dirname(simulations.__file__), "tests", "example_traj.txt"
@@ -468,7 +464,7 @@ def test_cylinder_diffusion():
     n_s = int(1e2)
     n_t = int(1e2)
     diffusivity = 2e-9
-    gradient, dt = load_example_gradient()
+    gradient, dt = create_example_gradient()
     gradient, dt = gradients.interpolate_gradient(gradient, dt, n_t)
     traj_file = os.path.join(
         os.path.dirname(simulations.__file__), "tests", "example_traj.txt"
@@ -534,7 +530,7 @@ def test_cylinder_diffusion():
     # Cylinder rotation
     n_s = int(1e5)
     n_t = int(1e3)
-    gradient, dt = load_example_gradient()
+    gradient, dt = create_example_gradient()
     bs = np.linspace(1, 3e9, 100)
     gradient = np.concatenate([gradient for _ in bs], axis=0)
     gradient, dt = gradients.interpolate_gradient(gradient, dt, n_t)
@@ -557,7 +553,7 @@ def test_sphere_diffusion():
     n_s = int(1e2)
     n_t = int(1e2)
     diffusivity = 2e-9
-    gradient, dt = load_example_gradient()
+    gradient, dt = create_example_gradient()
     gradient, dt = gradients.interpolate_gradient(gradient, dt, n_t)
     traj_file = os.path.join(
         os.path.dirname(simulations.__file__), "tests", "example_traj.txt"
@@ -622,7 +618,7 @@ def test_ellipsoid_diffusion():
     n_s = int(1e2)
     n_t = int(1e2)
     diffusivity = 2e-9
-    gradient, dt = load_example_gradient()
+    gradient, dt = create_example_gradient()
     gradient, dt = gradients.interpolate_gradient(gradient, dt, n_t)
     traj_file = os.path.join(
         os.path.dirname(simulations.__file__), "tests", "example_traj.txt"
@@ -769,4 +765,23 @@ def test_mesh_diffusion():
                 True,
             )
 
+    # Test with neuron model and confirm that no spins leak
+    n_s = int(1e3)
+    n_t = int(1e2)
+    gradient = np.ones((1, n_t, 3))
+    for dt in [1e-5, 1e-3, 1e-1]:
+        mesh_path = os.path.join(
+            os.path.dirname(simulations.__file__), "tests", "neuron-model.pkl"
+        )
+        with open(mesh_path, "rb") as f:
+            example_mesh = pickle.load(f)
+        faces = example_mesh["faces"]
+        vertices = example_mesh["vertices"]
+        substrate = substrates.mesh(vertices, faces, init_pos="intra", periodic=True)
+        signals, pos = simulations.simulation(
+            n_s, diffusivity, gradient, dt, substrate, final_pos=True
+        )
+        npt.assert_equal(np.all(np.max(pos, axis=0) < substrate.voxel_size), True)
+        npt.assert_equal(np.all(np.min(pos, axis=0) > 0), True)
     return
+

@@ -14,9 +14,9 @@ def vec2vec_rotmat(v, k):
     Parameters
     -----------
     v : numpy.ndarray
-        1D array of length 3.
+        1D array with length 3.
     k : numpy.ndarray
-        1D array of length.
+        1D array with length 3.
 
     Returns
     ---------
@@ -25,14 +25,14 @@ def vec2vec_rotmat(v, k):
     """
     v = v / np.linalg.norm(v)
     k = k / np.linalg.norm(k)
-    axis = np.cross(v, k).astype(float)
+    axis = np.cross(v, k)
     if np.linalg.norm(axis) < np.finfo(float).eps:
         if np.linalg.norm(v - k) > np.linalg.norm(v):
             return -np.eye(3)
         else:
             return np.eye(3)
     axis /= np.linalg.norm(axis)
-    angle = np.arccos(np.dot(v, k) / (np.linalg.norm(k) * np.linalg.norm(v)))
+    angle = np.arccos(np.dot(v, k))
     K = np.array(
         [[0, -axis[2], axis[1]], [axis[2], 0, -axis[0]], [-axis[1], axis[0], 0]]
     )
@@ -43,14 +43,18 @@ def vec2vec_rotmat(v, k):
 
 
 def show_traj(traj_file):
-    """Visualize walker trajectories saved in a trajectories file.
+    """Plot walker trajectories saved in a trajectories file.
 
     Parameters
     ----------
     traj_file : str
-        Path to trajectories file that contains walker trajectories. Every line
-        represents a time point. Every line contains the positions as follows:
-        walker_1_x walker_1_y walker_1_z walker_2_x walker_2_y walker_2_z...
+        Path of a trajectories file where every line represents a time point
+        and every line contains the positions as follows: walker_1_x walker_1_y
+        walker_1_z walker_2_x walker_2_y walker_2_z...
+
+    Returns
+    -------
+    None
     """
     trajectories = np.loadtxt(traj_file)
     trajectories = trajectories.reshape(
@@ -74,35 +78,36 @@ def show_traj(traj_file):
     return
 
 
-def show_mesh(substrate, alpha=0.5):
+def show_mesh(substrate):
     """Visualize a triangular mesh with random triangle colours.
 
     Parameters
     ----------
     substrate : disimpy.substrates._Substrate
         Substrate object containing the triangular mesh.
-    alpha : float
-        Parameter controlling the triangle transparency.
+
+    Returns
+    -------
+    None
     """
+    np.random.seed(123)
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection="3d")
     with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
         # The code below often resulted in a runtime warning so ignore warnings
         # as a temporary solution
-        warnings.simplefilter("ignore")
-        np.random.seed(123)
-        fig = plt.figure()
-        ax = fig.add_subplot(111, projection="3d")
         for idx in substrate.faces:
-            tri = Poly3DCollection(substrate.vertices[idx], alpha=alpha)
-            face_color = np.random.random(3)
-            tri.set_facecolor(face_color)
+            tri = Poly3DCollection(substrate.vertices[idx], alpha=0.5)
+            tri.set_facecolor(np.random.random(3))
             ax.add_collection3d(tri)
-        ax.set_xlim([0, substrate.voxel_size[0]])
-        ax.set_ylim([0, substrate.voxel_size[1]])
-        ax.set_zlim([0, substrate.voxel_size[2]])
-        ax.set_xlabel("x")
-        ax.set_ylabel("y")
-        ax.set_zlabel("z")
-        ax.ticklabel_format(style="sci", scilimits=(0, 0))
-        fig.tight_layout()
-        plt.show()
+    ax.set_xlim([0, substrate.voxel_size[0]])
+    ax.set_ylim([0, substrate.voxel_size[1]])
+    ax.set_zlim([0, substrate.voxel_size[2]])
+    ax.set_xlabel("x")
+    ax.set_ylabel("y")
+    ax.set_zlabel("z")
+    ax.ticklabel_format(style="sci", scilimits=(0, 0))
+    fig.tight_layout()
+    plt.show()
     return

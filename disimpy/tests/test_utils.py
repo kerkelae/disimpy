@@ -10,7 +10,7 @@ from .. import utils
 
 def test_vec2vec_rotmat():
     np.random.seed(123)
-    for _ in range(100):
+    for _ in range(1000):
         a = np.random.random(3) - 0.5
         a_norm = np.linalg.norm(a)
         b = np.random.random(3) - 0.5

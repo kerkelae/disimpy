@@ -32,11 +32,7 @@ def vec2vec_rotmat(v, k):
         else:
             return np.eye(3)
     axis /= np.linalg.norm(axis)
-    angle = np.arcsin(
-        np.linalg.norm(np.cross(v, k)) / (np.linalg.norm(k) * np.linalg.norm(v))
-    )
-    if np.dot(v, k) < 0:
-        angle = np.pi - angle
+    angle = np.arccos(np.dot(v, k) / (np.linalg.norm(k) * np.linalg.norm(v)))
     K = np.array(
         [[0, -axis[2], axis[1]], [axis[2], 0, -axis[0]], [-axis[1], axis[0], 0]]
     )

@@ -1,8 +1,7 @@
-sphinx>=3.0.3
-nbsphinx>=0.7.0
+sphinx==4.3.1
+nbsphinx==0.8.7
 ipython
-numpy>=1.18.4
-matplotlib>=3.1.3
-numba>=0.49.0
-scipy>=1.4.1
-pytest>=5.4.1
+matplotlib
+numba
+numpy
+pytest

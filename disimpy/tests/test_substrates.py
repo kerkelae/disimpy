@@ -2,6 +2,7 @@
 
 import os
 import pickle
+
 import numpy as np
 import numpy.testing as npt
 import matplotlib.pyplot as plt
@@ -10,6 +11,9 @@ from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
 
 from .. import substrates
+
+
+SEED = 123
 
 
 def test_free():
@@ -227,7 +231,7 @@ def test_mesh():
 
 
 def test__cross_product():
-    np.random.seed(123)
+    np.random.seed(SEED)
     for _ in range(100):
         a = np.random.random(3) - 0.5
         b = np.random.random(3) - 0.5
@@ -236,7 +240,7 @@ def test__cross_product():
 
 
 def test__dot_product():
-    np.random.seed(123)
+    np.random.seed(SEED)
     for _ in range(100):
         a = np.random.random(3) - 0.5
         b = np.random.random(3) - 0.5

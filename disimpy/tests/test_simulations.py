@@ -415,7 +415,7 @@ def test__fill_mesh():
     return
 
 
-def create_example_gradient():
+def example_gradient():
     T = 80e-3
     gradient = np.zeros((1, 100, 3))
     gradient[0, 1:11, 0] = 1
@@ -430,7 +430,7 @@ def test_free_diffusion():
     n_s = int(1e5)
     n_t = int(1e3)
     diffusivity = 2e-9
-    gradient, dt = create_example_gradient()
+    gradient, dt = example_gradient()
     bs = np.linspace(1, 2e9, 100)
     gradient = np.concatenate([gradient for _ in bs], axis=0)
     gradient, dt = gradients.interpolate_gradient(gradient, dt, n_t)
@@ -442,7 +442,7 @@ def test_free_diffusion():
     # Walker trajectories
     n_s = int(1e4)
     n_t = int(1e2)
-    gradient, dt = create_example_gradient()
+    gradient, dt = example_gradient()
     gradient, dt = gradients.interpolate_gradient(gradient, dt, n_t)
     traj_file = os.path.join(
         os.path.dirname(simulations.__file__), "tests", "example_traj.txt"
@@ -464,7 +464,7 @@ def test_cylinder_diffusion():
     n_s = int(1e2)
     n_t = int(1e2)
     diffusivity = 2e-9
-    gradient, dt = create_example_gradient()
+    gradient, dt = example_gradient()
     gradient, dt = gradients.interpolate_gradient(gradient, dt, n_t)
     traj_file = os.path.join(
         os.path.dirname(simulations.__file__), "tests", "example_traj.txt"
@@ -530,7 +530,7 @@ def test_cylinder_diffusion():
     # Cylinder rotation
     n_s = int(1e5)
     n_t = int(1e3)
-    gradient, dt = create_example_gradient()
+    gradient, dt = example_gradient()
     bs = np.linspace(1, 3e9, 100)
     gradient = np.concatenate([gradient for _ in bs], axis=0)
     gradient, dt = gradients.interpolate_gradient(gradient, dt, n_t)
@@ -553,7 +553,7 @@ def test_sphere_diffusion():
     n_s = int(1e2)
     n_t = int(1e2)
     diffusivity = 2e-9
-    gradient, dt = create_example_gradient()
+    gradient, dt = example_gradient()
     gradient, dt = gradients.interpolate_gradient(gradient, dt, n_t)
     traj_file = os.path.join(
         os.path.dirname(simulations.__file__), "tests", "example_traj.txt"
@@ -618,7 +618,7 @@ def test_ellipsoid_diffusion():
     n_s = int(1e2)
     n_t = int(1e2)
     diffusivity = 2e-9
-    gradient, dt = create_example_gradient()
+    gradient, dt = example_gradient()
     gradient, dt = gradients.interpolate_gradient(gradient, dt, n_t)
     traj_file = os.path.join(
         os.path.dirname(simulations.__file__), "tests", "example_traj.txt"

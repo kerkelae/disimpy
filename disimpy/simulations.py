@@ -1,6 +1,7 @@
 """This module contains code for running diffusion-weighted MR simulations."""
 
 import os
+import sys
 import time
 import math
 import warnings
@@ -1164,9 +1165,8 @@ def simulation(
                 positions = d_positions.copy_to_host(stream=stream)
                 _write_traj(traj, "a", positions)
             if not quiet:
-                print(
-                    f"\r{np.round((t / gradient.shape[1]) * 100, 0)}%", end="",
-                )
+                sys.stdout.write(f"\r{np.round((t / gradient.shape[1]) * 100, 1)}%")
+                sys.stdout.flush()
 
     elif substrate.type == "cylinder":
 
@@ -1206,9 +1206,8 @@ def simulation(
                 positions = d_positions.copy_to_host(stream=stream)
                 _write_traj(traj, "a", positions)
             if not quiet:
-                print(
-                    f"\r{np.round((t / gradient.shape[1]) * 100, 0)}%", end="",
-                )
+                sys.stdout.write(f"\r{np.round((t / gradient.shape[1]) * 100, 1)}%")
+                sys.stdout.flush()
 
     elif substrate.type == "sphere":
 
@@ -1240,9 +1239,8 @@ def simulation(
                 positions = d_positions.copy_to_host(stream=stream)
                 _write_traj(traj, "a", positions)
             if not quiet:
-                print(
-                    f"\r{np.round((t / gradient.shape[1]) * 100, 0)}%", end="",
-                )
+                sys.stdout.write(f"\r{np.round((t / gradient.shape[1]) * 100, 1)}%")
+                sys.stdout.flush()
 
     elif substrate.type == "ellipsoid":
 
@@ -1283,9 +1281,8 @@ def simulation(
                 positions = d_positions.copy_to_host(stream=stream)
                 _write_traj(traj, "a", positions)
             if not quiet:
-                print(
-                    f"\r{np.round((t / gradient.shape[1]) * 100, 0)}%", end="",
-                )
+                sys.stdout.write(f"\r{np.round((t / gradient.shape[1]) * 100, 1)}%")
+                sys.stdout.flush()
 
     elif substrate.type == "mesh":
 
@@ -1351,9 +1348,8 @@ def simulation(
                 positions = d_positions.copy_to_host(stream=stream)
                 _write_traj(traj, "a", positions)
             if not quiet:
-                print(
-                    f"\r{np.round((t / gradient.shape[1]) * 100, 0)}%", end="",
-                )
+                sys.stdout.write(f"\r{np.round((t / gradient.shape[1]) * 100, 1)}%")
+                sys.stdout.flush()
 
     else:
         raise ValueError("Incorrect value (%s) for substrate" % substrate)

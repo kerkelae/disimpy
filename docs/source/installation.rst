@@ -36,13 +36,26 @@ instructions below.
 Installation
 ############
 
-To avoid possible dependency issues, we recommend installing Disimpy in a
-virtual environment. Disimpy can be installed with pip by executing: ::
+To avoid possible dependency issues, it is recommended to install Disimpy in a
+virtual environment.
+
+The most recent release can be installed with pip: 
+
+.. code-block::
+
+    pip install disimpy
+
+The latest code in the master branch with the most recent updates can be
+installed with pip: 
+
+.. code-block::
 
     pip install git+https://github.com/kerkelae/disimpy.git
 
+
+
 Alternatively, given that the requirements are met, you can use Disimpy without
-installing by downloading the code `here
+installing by downloading the latest code `here
 <https://github.com/kerkelae/disimpy/archive/master.zip>`_ and directly
 importing the functions you want to use from the downloaded modules.
 

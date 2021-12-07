@@ -12,17 +12,18 @@
 
 import os
 import sys
-sys.path.insert(0, os.path.abspath('..'))
+
+sys.path.insert(0, os.path.abspath(".."))
 
 
 # -- Project information -----------------------------------------------------
 
-project = 'Disimpy'
-copyright = '2020 Leevi Kerkelä'
-author = 'Leevi Kerkelä'
+project = "Disimpy"
+copyright = "2020 Leevi Kerkelä"
+author = "Leevi Kerkelä"
 
 # The full version, including alpha/beta/rc tags
-release = '0.1'
+release = "0.2.0"
 
 
 # -- General configuration ---------------------------------------------------
@@ -31,20 +32,20 @@ release = '0.1'
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = [
-    'sphinx.ext.autodoc',
-    'sphinx.ext.napoleon',
-    'nbsphinx',
+    "sphinx.ext.autodoc",
+    "sphinx.ext.napoleon",
+    "nbsphinx",
 ]
 
 # Add any paths that contain templates here, relative to this directory.
-templates_path = ['_templates']
+templates_path = ["_templates"]
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
 # This pattern also affects html_static_path and html_extra_path.
 exclude_patterns = [
-    '_build',
-    '**.ipynb_checkpoints',
+    "_build",
+    "**.ipynb_checkpoints",
 ]
 
 
@@ -53,31 +54,26 @@ exclude_patterns = [
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
-html_theme = 'alabaster'
+html_theme = "alabaster"
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
-html_static_path = ['_static']
+html_static_path = ["_static"]
 
 html_theme_options = {
-    'page_width': '1090px',  # Default is too narrow for standard notebooks
-    'description': 'Massively parallel diffusion MR simulator written in Python.',
-    'logo' : 'logo.png',
-    'logo_name' : True
+    "page_width": "1090px",  # Default is too narrow for standard notebooks
+    "description": "Massively parallel diffusion MR simulator written in Python.",
+    "logo": "logo.png",
+    "logo_name": True,
 }
 
 html_show_sourcelink = False
 
-html_sidebars = {
-    '**': [
-        'about.html',
-        'navigation.html',
-    ]
-}
+html_sidebars = {"**": ["about.html", "navigation.html",]}
 
 
 # -- Other configuration -----------------------------------------------------
 
 # Specify master doc so build at read the docs won't fail
-master_doc = 'index'
+master_doc = "index"

@@ -1,16 +1,15 @@
 from setuptools import setup
 
-with open("requirements.txt") as f:
-    requirements = f.read().splitlines()
-
 setup(
     name="disimpy",
-    version="0.1.2dev",
+    version="0.2.0",
     description="Massively parallel diffusion MR simulator",
     url="https://github.com/kerkelae/disimpy",
+    author="Leevi Kerkelä",
+    author_email="leevi.kerkela@protonmail.com",
     license="MIT",
     packages=["disimpy", "disimpy.tests"],
-    install_requires=requirements,
+    install_requires=["matplotlib", "numba", "numpy", "pytest"],
     include_package_data=True,
-    package_data={"": ["tests/*"]},
+    package_data={"": ["requirements.txt", "license.txt", "tests/*"]},
 )

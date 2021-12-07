@@ -4,6 +4,7 @@ import os
 import math
 import numba
 import pickle
+
 import numpy as np
 from numba import cuda
 import numpy.testing as npt

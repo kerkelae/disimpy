@@ -407,12 +407,12 @@ def test__fill_mesh():
                 substrate = substrates.mesh(
                     vertices, faces, periodic, padding=padding, n_sv=n_sv
                 )
-                points = simulations._fill_mesh(n_s, substrate, True, seed=123)
+                points = simulations._fill_mesh(n_s, substrate, True, seed=SEED)
                 r = (substrate.voxel_size - padding * 2) / 2
                 points -= r + padding
                 npt.assert_equal(np.max(np.linalg.norm(points, axis=1)) < r, True)
                 npt.assert_almost_equal(np.mean(points, axis=0), np.zeros(3))
-                points = simulations._fill_mesh(n_s, substrate, False, seed=123)
+                points = simulations._fill_mesh(n_s, substrate, False, seed=SEED)
                 points -= r + padding
                 npt.assert_equal(np.min(np.linalg.norm(points, axis=1)) > 0.9 * r, True)
                 npt.assert_almost_equal(np.mean(points, axis=0), np.zeros(3))

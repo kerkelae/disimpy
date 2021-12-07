@@ -145,7 +145,7 @@ def mesh(
     periodic,
     padding=np.zeros(3),
     init_pos="uniform",
-    n_sv=np.array([10, 10, 10]),
+    n_sv=np.array([50, 50, 50]),
     quiet=False,
 ):
     """Return a substrate object for simulating diffusion restricted by a

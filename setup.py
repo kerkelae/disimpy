@@ -1,9 +1,13 @@
 from setuptools import setup
 
+with open("README.rst", "r", encoding="utf-8") as f:
+    long_description = f.read()
+
 setup(
     name="disimpy",
     version="0.2.0",
     description="Massively parallel diffusion MR simulator",
+    long_description=long_description,
     url="https://github.com/kerkelae/disimpy",
     author="Leevi Kerkelä",
     author_email="leevi.kerkela@protonmail.com",

@@ -17,6 +17,9 @@ from numba.cuda.random import (
 from .. import gradients, simulations, substrates, utils
 
 
+SEED = 123
+
+
 def test__cuda_dot_product():
     @cuda.jit()
     def test_kernel(a, b, dp):
@@ -26,7 +29,7 @@ def test__cuda_dot_product():
         dp[thread_id] = simulations._cuda_dot_product(a[thread_id, :], b[thread_id, :])
         return
 
-    np.random.seed(123)
+    np.random.seed(SEED)
     for _ in range(100):
         a = (np.random.random(3) - 0.5)[np.newaxis, :]
         b = (np.random.random(3) - 0.5)[np.newaxis, :]
@@ -49,7 +52,7 @@ def test__cuda_cross_product():
         )
         return
 
-    np.random.seed(123)
+    np.random.seed(SEED)
     for _ in range(100):
         a = (np.random.random(3) - 0.5)[np.newaxis, :]
         b = (np.random.random(3) - 0.5)[np.newaxis, :]
@@ -70,7 +73,7 @@ def test__cuda_normalize_vector():
         simulations._cuda_normalize_vector(a[thread_id, :])
         return
 
-    np.random.seed(123)
+    np.random.seed(SEED)
     for _ in range(100):
         a = (np.random.random(3) - 0.5)[np.newaxis, :]
         desired_a = a / np.linalg.norm(a)
@@ -90,7 +93,7 @@ def test__cuda_triangle_normal():
         simulations._cuda_triangle_normal(triangle[thread_id, :], normal[thread_id, :])
         return
 
-    np.random.seed(123)
+    np.random.seed(SEED)
     for _ in range(100):
         triangle = (np.random.random((3, 3)) - 0.5)[np.newaxis, :]
         desired = np.cross(

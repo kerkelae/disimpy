@@ -1373,7 +1373,7 @@ def simulation(
         phases[:, np.where(iter_exc)[0]] = np.nan
         signals = np.real(np.nansum(np.exp(1j * phases), axis=1))
     if not quiet:
-        print("\rSimulation finished")
+        print("Simulation finished")
     if final_pos:
         positions = d_positions.copy_to_host(stream=stream)
         return signals, positions

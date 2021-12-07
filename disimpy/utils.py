@@ -91,23 +91,23 @@ def show_mesh(substrate):
     None
     """
     np.random.seed(123)
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection="3d")
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         # The code below often resulted in a runtime warning so ignore warnings
         # as a temporary solution
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection="3d")
         for idx in substrate.faces:
             tri = Poly3DCollection(substrate.vertices[idx], alpha=0.5)
             tri.set_facecolor(np.random.random(3))
             ax.add_collection3d(tri)
-    ax.set_xlim([0, substrate.voxel_size[0]])
-    ax.set_ylim([0, substrate.voxel_size[1]])
-    ax.set_zlim([0, substrate.voxel_size[2]])
-    ax.set_xlabel("x")
-    ax.set_ylabel("y")
-    ax.set_zlabel("z")
-    ax.ticklabel_format(style="sci", scilimits=(0, 0))
-    fig.tight_layout()
-    plt.show()
+        ax.set_xlim([0, substrate.voxel_size[0]])
+        ax.set_ylim([0, substrate.voxel_size[1]])
+        ax.set_zlim([0, substrate.voxel_size[2]])
+        ax.set_xlabel("x")
+        ax.set_ylabel("y")
+        ax.set_zlabel("z")
+        ax.ticklabel_format(style="sci", scilimits=(0, 0))
+        fig.tight_layout()
+        plt.show()
     return

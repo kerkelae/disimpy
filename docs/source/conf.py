@@ -19,7 +19,7 @@ sys.path.insert(0, os.path.abspath(".."))
 # -- Project information -----------------------------------------------------
 
 project = "Disimpy"
-copyright = "2020 Leevi Kerkelä"
+copyright = " Leevi Kerkelä"
 author = "Leevi Kerkelä"
 
 # The full version, including alpha/beta/rc tags

@@ -5,7 +5,7 @@ with open("README.rst", "r", encoding="utf-8") as f:
 
 setup(
     name="disimpy",
-    version="0.2.0",
+    version="0.2.1dev",
     description="Massively parallel diffusion MR simulator",
     long_description=long_description,
     url="https://github.com/kerkelae/disimpy",
@@ -13,7 +13,7 @@ setup(
     author_email="leevi.kerkela@protonmail.com",
     license="MIT",
     packages=["disimpy", "disimpy.tests"],
-    install_requires=["matplotlib", "numba", "numpy", "pytest"],
+    install_requires=["matplotlib", "numba", "numpy", "pytest", "scipy"],
     include_package_data=True,
-    package_data={"": ["requirements.txt", "license.txt", "tests/*"]},
+    package_data={"": ["license.txt", "tests/*"]},
 )

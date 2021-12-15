@@ -29,6 +29,7 @@ In addition, you need the following Python packages:
 - numba
 - numpy
 - pytest
+- scipy
 
 These are automatically installed by pip if you follow the installation
 instructions below.

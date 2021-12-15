@@ -25,11 +25,11 @@ that the `installation path is configured so that Numba can access it
 
 In addition, you need the following Python packages:
 
-- matplotlib
-- numba
-- numpy
-- pytest
-- scipy
+- ``matplotlib``
+- ``numba``
+- ``numpy``
+- ``pytest``
+- ``scipy``
 
 These are automatically installed by pip if you follow the installation
 instructions below.

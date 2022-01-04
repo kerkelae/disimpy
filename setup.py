@@ -5,7 +5,7 @@ with open("README.rst", "r", encoding="utf-8") as f:
 
 setup(
     name="disimpy",
-    version="0.2.1dev",
+    version="0.2.1",
     description="Massively parallel diffusion MR simulator",
     long_description=long_description,
     url="https://github.com/kerkelae/disimpy",

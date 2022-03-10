@@ -6,6 +6,7 @@ gradient magnitude in SI units (T/m).
 """
 
 import numpy as np
+import utils
 
 
 GAMMA = 267.513e6  # Gyromagnetic ratio of the simulated spins
@@ -137,3 +138,49 @@ def rotate_gradient(gradient, Rs):
             raise ValueError(f"Rs[{i}] ({R}) is not a valid rotation matrix")
         g[i, :, :] = np.matmul(R, gradient[i, :, :].T).T
     return g
+
+
+def pgse(delta, DELTA, n_t, bvals, bvecs):
+    '''Generate a gradient array for the Pulsed Gradient Spin Echo sequence.
+
+    Parameters
+    ----------
+    delta: float
+        Duration of the gradient.
+    DELTA : float
+        Duration of the gradient plus the interval between gradients.
+    n_t : int
+        The number of time points in the gradient array after interpolation. 
+    bvals : float or numpy.ndarray
+        b-value or an array of b-values with length equal to n of measurements.
+    bvecs : numpy.ndarray
+        b-vector or array of Array of b-vectors with length equal to n of measurements.
+    Returns
+    -------
+    gradient : numpy.ndarray
+        PGSE gradient array.
+    dt : float
+        Duration of a time step in the gradient array.
+    
+    '''
+    initial_n_t = 10e4
+    gradient = np.zeros((1, initial_n_t, 3)) 
+    
+    T = delta + DELTA
+    dt = T / (gradient.shape[1] - 1)
+    n_delta = np.round(delta / dt).astype(int)
+
+    gradient[0, 1:n_delta, 0] = 1
+    gradient[0, -n_delta:-1, 0] = 1
+
+    gradient, dt = interpolate_gradient(gradient, dt, n_t)
+
+    gradient = np.concatenate([gradient for _ in bvals], axis=0)
+    gradient = set_b(gradient, dt, bvals) 
+
+    Rs = np.zeros((len(bvals), 3, 3))
+    for i, bvec in enumerate(bvecs):
+        Rs[i] = utils.vec2vec_rotmat(np.array([1., 0., 0.]), bvec)
+    gradient = rotate_gradient(gradient, Rs)
+    
+    return gradient, dt

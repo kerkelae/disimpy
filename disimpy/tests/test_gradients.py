@@ -3,7 +3,7 @@
 import numpy as np
 import numpy.testing as npt
 
-from disimpy import gradients, utils
+from .. import gradients, utils
 
 
 def example_gradient():

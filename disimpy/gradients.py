@@ -6,7 +6,8 @@ gradient magnitude in SI units (T/m).
 """
 
 import numpy as np
-import utils
+
+from . import utils
 
 
 GAMMA = 267.513e6  # Gyromagnetic ratio of the simulated spins
@@ -141,46 +142,38 @@ def rotate_gradient(gradient, Rs):
 
 
 def pgse(delta, DELTA, n_t, bvals, bvecs):
-    '''Generate a gradient array for the Pulsed Gradient Spin Echo sequence.
+    """Generate a pulsed gradient spin echo gradient array.
 
     Parameters
     ----------
     delta: float
-        Duration of the gradient.
+        Diffusion encoding time.
     DELTA : float
-        Duration of the gradient plus the interval between gradients.
+        Diffusion time.
     n_t : int
-        The number of time points in the gradient array after interpolation. 
+        The number of time points in the generated gradient array. 
     bvals : float or numpy.ndarray
-        b-value or an array of b-values with length equal to n of measurements.
+        b-value or an array of b-values.
     bvecs : numpy.ndarray
-        b-vector or array of Array of b-vectors with length equal to n of measurements.
+        b-vector or array of b-vectors.
+
     Returns
     -------
     gradient : numpy.ndarray
-        PGSE gradient array.
+        Gradient array.
     dt : float
-        Duration of a time step in the gradient array.
-    
-    '''
-    initial_n_t = 10e4.astype(int)
-    gradient = np.zeros((1, initial_n_t, 3)) 
-    
+        Duration of a time step in the gradient array.   
+    """
+    gradient = np.zeros((1, int(1e6), 3))
     T = delta + DELTA
     dt = T / (gradient.shape[1] - 1)
-    n_delta = np.round(delta / dt).astype(int)
-
-    gradient[0, 1:n_delta, 0] = 1
-    gradient[0, -n_delta:-1, 0] = 1
-
+    gradient[0, 1 : np.round(delta / dt).astype(int), 0] = 1
+    gradient[0, -np.round(delta / dt).astype(int) : -1, 0] = -1
     gradient, dt = interpolate_gradient(gradient, dt, n_t)
-
     gradient = np.concatenate([gradient for _ in bvals], axis=0)
-    gradient = set_b(gradient, dt, bvals) 
-
+    gradient = set_b(gradient, dt, bvals)
     Rs = np.zeros((len(bvals), 3, 3))
     for i, bvec in enumerate(bvecs):
-        Rs[i] = utils.vec2vec_rotmat(np.array([1., 0., 0.]), bvec)
+        Rs[i] = utils.vec2vec_rotmat(np.array([1.0, 0.0, 0.0]), bvec)
     gradient = rotate_gradient(gradient, Rs)
-    
     return gradient, dt

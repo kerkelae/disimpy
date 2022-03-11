@@ -73,12 +73,37 @@ def test_rotate_gradient():
     npt.assert_raises(ValueError, gradients.rotate_gradient, gradient=gradient, Rs=Rs)
     return
 
+
 def test_pgse():
-    delta = 10e-3
-    DELTA = 40e-3
+    delta = 15e-3
+    DELTA = 50e-3
     bvals = np.array([1e9, 2e9, 3e9])
-    bvecs = np.array([[1., 0., 0.], [0., 1., 0.], [0., 0., 1.]])
+    bvecs = np.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
     n_t = int(1e4)
-    pgse_gradient, pgse_dt = gradients.pgse(delta, DELTA, n_t, bvals, bvecs)
-    npt.assert_equal(pgse_gradient.shape, (len(bvals), n_t, 3))
+    gradient, dt = gradients.pgse(delta, DELTA, n_t, bvals, bvecs)
+    npt.assert_equal(gradient.shape, (len(bvals), n_t, 3))
+    npt.assert_equal(np.all(gradient[:, 0, :] == 0), True)
+    npt.assert_equal(np.all(gradient[:, -1, :] == 0), True)
+    npt.assert_almost_equal(np.sum(gradient, axis=1), 0)
+    for i in range(3):
+        npt.assert_almost_equal(
+            np.sum(
+                (np.abs(gradient[i, 0 : int(n_t / 2), :]) > np.finfo(float).resolution)
+            )
+            * dt,
+            delta,
+            5,
+        )
+        npt.assert_almost_equal(
+            np.sum(
+                (np.abs(gradient[i, int(n_t / 2) : :, :]) > np.finfo(float).resolution)
+            )
+            * dt,
+            delta,
+            5,
+        )
+    npt.assert_almost_equal(gradients.calc_b(gradient, dt) / 1e9, bvals / 1e9)
+    npt.assert_almost_equal(
+        gradient[:, 1] / np.linalg.norm(gradient[:, 1], axis=1), bvecs
+    )
     return

@@ -163,7 +163,7 @@ def pgse(delta, DELTA, n_t, bvals, bvecs):
         Duration of a time step in the gradient array.
     
     '''
-    initial_n_t = 10e4
+    initial_n_t = 10e4.astype(int)
     gradient = np.zeros((1, initial_n_t, 3)) 
     
     T = delta + DELTA

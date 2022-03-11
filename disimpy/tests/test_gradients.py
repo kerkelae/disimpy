@@ -82,3 +82,5 @@ def test_pgse():
     pgse_gradient, pgse_dt = gradients.pgse(delta, DELTA, n_t, bvals, bvecs)
     npt.assert_equal(pgse_gradient.shape, (len(bvals), n_t, 3))
     return
+
+test_pgse()

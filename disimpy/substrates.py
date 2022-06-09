@@ -140,13 +140,14 @@ def ellipsoid(semiaxes, R=np.eye(3)):
 
 
 def mesh(
+    perm_prob,
     vertices,
     faces,
     periodic,
     padding=np.zeros(3),
     init_pos="uniform",
     n_sv=np.array([50, 50, 50]),
-    quiet=False,
+    quiet=False, 
 ):
     """Return a substrate object for simulating diffusion restricted by a
     triangular mesh. The size of the simulated voxel is equal to the axis-
@@ -155,6 +156,8 @@ def mesh(
 
     Parameters
     ----------
+    perm_prob : float
+        Probability that a spin goes through a triangle.
     vertices : numpy.ndarray
         Floating-point array with shape (number of vertices, 3) containing the
         vertices of the triangular mesh.

@@ -28,6 +28,7 @@ class _Substrate:
             self.periodic = kwargs["periodic"]
             self.init_pos = kwargs["init_pos"]
             self.n_sv = kwargs["n_sv"]
+            self.perm_prob = kwargs["perm_prob"]
             if not kwargs["quiet"]:
                 print("Dividing the mesh into subvoxels")
             (
@@ -198,6 +199,12 @@ def mesh(
         Substrate object.
     """
     if (
+        not isinstance(perm_prob, float)
+        or perm_prob < 0
+        or perm_prob > 1
+    ):
+        raise ValueError(f"Incorrect value ({perm_prob}) for perm_prob.")
+    if (
         not isinstance(vertices, np.ndarray)
         or vertices.ndim != 2
         or vertices.shape[1] != 3
@@ -257,6 +264,7 @@ def mesh(
         periodic=periodic,
         init_pos=init_pos,
         quiet=quiet,
+        perm_prob=perm_prob,
     )
     return substrate
 

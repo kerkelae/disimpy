@@ -141,14 +141,14 @@ def ellipsoid(semiaxes, R=np.eye(3)):
 
 
 def mesh(
-    perm_prob,
     vertices,
     faces,
     periodic,
     padding=np.zeros(3),
     init_pos="uniform",
     n_sv=np.array([50, 50, 50]),
-    quiet=False, 
+    quiet=False,
+    perm_prob=0.0,
 ):
     """Return a substrate object for simulating diffusion restricted by a
     triangular mesh. The size of the simulated voxel is equal to the axis-
@@ -157,8 +157,6 @@ def mesh(
 
     Parameters
     ----------
-    perm_prob : float
-        Probability that a spin goes through a triangle.
     vertices : numpy.ndarray
         Floating-point array with shape (number of vertices, 3) containing the
         vertices of the triangular mesh.
@@ -192,18 +190,14 @@ def mesh(
         algorithm.
     quiet : bool, optional
         If True, updates on computation progress are not printed.
+    perm_prob : float, optional
+        Probability that a spin goes through a triangle.
 
     Returns
     -------
     substrate : disimpy.substrates._Substrate
         Substrate object.
     """
-    if (
-        not isinstance(perm_prob, float)
-        or perm_prob < 0
-        or perm_prob > 1
-    ):
-        raise ValueError(f"Incorrect value ({perm_prob}) for perm_prob.")
     if (
         not isinstance(vertices, np.ndarray)
         or vertices.ndim != 2
@@ -244,6 +238,8 @@ def mesh(
         or not np.issubdtype(n_sv.dtype, np.integer)
     ):
         raise ValueError(f"Incorrect value ({n_sv}) for n_sv")
+    if not isinstance(perm_prob, float) or perm_prob < 0 or perm_prob > 1:
+        raise ValueError(f"Incorrect value ({perm_prob}) for perm_prob.")
     if not quiet:
         print("Aligning the corner of the simulated voxel with the origin")
     shift = -np.min(vertices, axis=0) + padding

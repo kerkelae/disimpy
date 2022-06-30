@@ -177,8 +177,8 @@ def _cuda_line_circle_intersection(r0, step, radius):
     """
     A = step[0] ** 2 + step[1] ** 2
     B = 2 * (r0[0] * step[0] + r0[1] * step[1])
-    C = r0[0] ** 2 + r0[1] ** 2 - radius**2
-    d = (-B + math.sqrt(B**2 - 4 * A * C)) / (2 * A)
+    C = r0[0] ** 2 + r0[1] ** 2 - radius ** 2
+    d = (-B + math.sqrt(B ** 2 - 4 * A * C)) / (2 * A)
     return d
 
 
@@ -198,7 +198,7 @@ def _cuda_line_sphere_intersection(r0, step, radius):
     float
     """
     dp = _cuda_dot_product(step, r0)
-    d = -dp + math.sqrt(dp**2 - (_cuda_dot_product(r0, r0) - radius**2))
+    d = -dp + math.sqrt(dp ** 2 - (_cuda_dot_product(r0, r0) - radius ** 2))
     return d
 
 
@@ -227,7 +227,7 @@ def _cuda_line_ellipsoid_intersection(r0, step, semiaxes):
         + c ** (-2) * step[2] * r0[2]
     )
     C = (r0[0] / a) ** 2 + (r0[1] / b) ** 2 + (r0[2] / c) ** 2 - 1
-    d = (-B + math.sqrt(B**2 - 4 * A * C)) / (2 * A)
+    d = (-B + math.sqrt(B ** 2 - 4 * A * C)) / (2 * A)
     return d
 
 
@@ -335,11 +335,11 @@ def _cuda_crossing(r0, step, d, normal, epsilon):
         intersection[i] = r0[i] + d * step[i]
         v[i] = intersection[i] - r0[i]
     dp = _cuda_dot_product(v, normal)
-    if dp < 0: # Make sure the normal vector points to the other side of the triangle
+    if dp < 0:  # Make sure the normal vector points to the other side of the triangle
         for i in range(3):
             normal[i] *= -1
         dp = _cuda_dot_product(v, normal)
-    for i in range(3): # Move walker slightly away from the surface
+    for i in range(3):  # Move walker slightly away from the surface
         r0[i] = intersection[i] + epsilon * normal[i]
     return
 
@@ -1199,15 +1199,7 @@ def simulation(
         # Run simulation
         for t in range(gradient.shape[1]):
             _cuda_step_free[gs, bs, stream](
-                d_positions,
-                d_g_x,
-                d_g_y,
-                d_g_z,
-                d_phases,
-                rng_states,
-                t,
-                step_l,
-                dt,
+                d_positions, d_g_x, d_g_y, d_g_z, d_phases, rng_states, t, step_l, dt,
             )
             stream.synchronize()
             if traj:

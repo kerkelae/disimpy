@@ -43,7 +43,6 @@ class _Substrate:
             if not kwargs["quiet"]:
                 print("Finished dividing the mesh into subvoxels")
 
-
 def free():
     """Return a substrate object for simulating free diffusion.
 

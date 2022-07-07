@@ -327,7 +327,7 @@ def _cuda_crossing(r0, step, d, normal, epsilon):
 
     Returns
     -------
-    float
+    None
     """
     intersection = cuda.local.array(3, numba.float64)
     v = cuda.local.array(3, numba.float64)
@@ -338,7 +338,7 @@ def _cuda_crossing(r0, step, d, normal, epsilon):
     if dp < 0:  # Make sure the normal vector points to the other side of the triangle
         for i in range(3):
             normal[i] *= -1
-        dp = _cuda_dot_product(v, normal)
+        #dp = _cuda_dot_product(v, normal)
     for i in range(3):  # Move walker slightly away from the surface
         r0[i] = intersection[i] + epsilon * normal[i]
     return

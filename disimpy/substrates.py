@@ -558,7 +558,6 @@ def _aabb_to_mesh(a, b):
     )
     return vertices, faces
 
-    import numpy as np
 
 def non_overlapping_circles(C1, r1, C2, r2):
   """Check if two circles overlap.
@@ -583,6 +582,7 @@ def non_overlapping_circles(C1, r1, C2, r2):
   if np.sqrt((y2-y1)**2 + (x1-x2)**2) <= (r1 + r2):  
     return False
   return True
+
 
 def mirrored_circles(C, r, voxel_size):
   '''
@@ -613,6 +613,7 @@ def mirrored_circles(C, r, voxel_size):
             [x - voxel_size, y + voxel_size, r],
             [x + voxel_size, y + voxel_size, r]]
   return mirrors
+
 
 def sampling_circles(n_objects, shape, scale, voxel_size):
   '''
@@ -672,6 +673,7 @@ def sampling_circles(n_objects, shape, scale, voxel_size):
             filled_positions += 1      
   return placed_circles, placed_mirrors
 
+
 def cylinder_mesh(r, C, n_faces, h):
   '''
   Generate a cylindric mesh.
@@ -710,6 +712,7 @@ def cylinder_mesh(r, C, n_faces, h):
   for p in connection_points:
     faces.append(p)
   return np.array(vertices), np.array(faces)
+
 
 def packed_cylinders(n_objects, voxel_size, shape, scale, n_faces, h):
   '''

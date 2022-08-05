@@ -559,193 +559,200 @@ def _aabb_to_mesh(a, b):
     return vertices, faces
 
 
-def non_overlapping_circles(C1, r1, C2, r2):
-  """Check if two circles overlap.
-  
-  Parameters
-  ----------
-  r1: float
-      Radius of the circle 1.
-  r2: float
-       Radius of the circle 2.
-  C1: tuple
-      Center of circle 1 C1(x1, y1). 
-  C2: tuple
-      Center of circle 2 C2(x2, y2).
+def _non_overlapping_circles(C1, r1, C2, r2):
+    """Check if two circles overlap.
 
-  Returns
-  -------
-  boolean
-  """
-  x1, y1 = C1
-  x2, y2 = C2
-  if np.sqrt((y2-y1)**2 + (x1-x2)**2) <= (r1 + r2):  
-    return False
-  return True
+    Parameters
+    ----------
+    r1 : float
+        Radius of the circle 1.
+    r2 : float
+        Radius of the circle 2.
+    C1 : tuple
+        Center of circle 1 C1(x1, y1).
+    C2 : tuple
+        Center of circle 2 C2(x2, y2).
+
+    Returns
+    -------
+    boolean
+    """
+    x1, y1 = C1
+    x2, y2 = C2
+    if np.sqrt((y2 - y1) ** 2 + (x1 - x2) ** 2) <= (r1 + r2):
+        return False
+    return True
 
 
-def mirrored_circles(C, r, voxel_size):
-  '''
-  Create mirrored versions of a circle.
-  
-  Parameters
-  ----------
-  C: tuple
-      Center of circle C(x, y).
-  r: float
-      Radius of the circle. 
-  voxel_size: float
-      Size of the voxel.
+def _mirrored_circles(C, r, voxel_size):
+    """Create mirrored versions of a circle.
 
-  Returns
-  -------
-  mirrors: numpy.ndarray
-      Array with center coordinates for the mirrors.
-  '''
-  x, y = C
-  mirrors = [[x, y, r],
+    Parameters
+    ----------
+    C : tuple
+        Center of circle C(x, y).
+    r : float
+        Radius of the circle.
+    voxel_size : float
+        Size of the voxel.
+
+    Returns
+    -------
+    mirrors : numpy.ndarray
+         Array with center coordinates for the mirrors.
+    """
+    x, y = C
+    mirrors = np.array(
+        [
+            [x, y, r],
             [x - voxel_size, y, r],
             [x + voxel_size, y, r],
             [x, y - voxel_size, r],
             [x, y + voxel_size, r],
             [x - voxel_size, y - voxel_size, r],
-            [x + voxel_size, y - voxel_size, r], 
+            [x + voxel_size, y - voxel_size, r],
             [x - voxel_size, y + voxel_size, r],
-            [x + voxel_size, y + voxel_size, r]]
-  return mirrors
+            [x + voxel_size, y + voxel_size, r],
+        ]
+    )
+    return mirrors
 
 
-def sampling_circles(n_objects, shape, scale, voxel_size):
-  '''
-  Sample circles from a gamma distribution and packed them in a voxel with periodic boundaries.
-  
-  Parameters
-  ----------
-  n_objects: int
-      Number of circles to be sampled.
-  shape: float
-      The shape of the gamma distribution.
-  scale: float
-      The scale of the gamma distribution. 
-  voxel_size: float
-      Size of the voxel.
+def _sampling_circles(n_objects, shape, scale, voxel_size, max_iterations=1e2):
+    """Sample circles from a gamma distribution and packed them in a voxel with periodic boundaries.
 
-  Returns
-  -------
-  placed_circles: numpy.ndarray
-      Array with the center coordinates and radius of the cirlces placed in the voxel.
-  placed_mirrors: numpy.ndarray
-      Array with the center coordinates and radius of the cirlces placed in the voxel and their mirrors.
-  '''
-  sampled_radii = np.random.gamma(shape, scale, n_objects)
-  sampled_radii = np.sort(sampled_radii)[::-1]
-  placed_circles = np.zeros((n_objects, 3))
-  placed_mirrors = np.zeros((n_objects * 9, 3))
-  filled_positions = 1
-  for r in sampled_radii:
-      placed = False
-      i = 0
-      while not placed and i < 1e2: 
-        i += 1
-        x, y = np.random.random(2) * voxel_size
-        mirrors = mirrored_circles((x, y), r, voxel_size)
-        if np.all(placed_circles == 0):
-          placed_circles[0] = x, y, r
-          for mirror, k in zip(mirrors, range(len(mirrors))):
-            placed_mirrors[k] = mirror
-          placed = True
-        else:
-          intersects = False
-          for mirror_cand in mirrors:
-            m_x, m_y, r = mirror_cand
-            end = filled_positions * 9
-            for mirror_stored in placed_mirrors[:end]:
-              ms_x, ms_y, ms_r = mirror_stored
-              if not non_overlapping_circles((m_x, m_y), r, (ms_x, ms_y), ms_r):
-                intersects = True 
-                break
-          if not intersects:
-            placed_circles[filled_positions] = x, y, r
-            interval = filled_positions * 9
-            for mirror, k in zip(mirrors, range(interval, len(mirrors)+interval)):
-              placed_mirrors[k] = mirror
-            placed = True
-            filled_positions += 1      
-  return placed_circles, placed_mirrors
+    Parameters
+    ----------
+    n_objects : int
+        Number of circles to be sampled.
+    shape : float
+        The shape of the gamma distribution.
+    scale : float
+        The scale of the gamma distribution.
+    voxel_size : float
+        Size of the voxel.
+    max_iterations : float
+        Maximum number of iterations to place a circle in the voxel. Default is equal to 1e2.
+
+    Returns
+    -------
+    placed_circles : numpy.ndarray
+        Array with the center coordinates and radius of the cirlces placed in the voxel.
+    placed_mirrors : numpy.ndarray
+        Array with the center coordinates and radius of the cirlces placed in the voxel and their mirrors.
+    """
+    sampled_radii = np.random.gamma(shape, scale, n_objects)
+    sampled_radii = np.sort(sampled_radii)[::-1]
+    placed_circles = np.zeros((n_objects, 3))
+    placed_mirrors = np.zeros((n_objects * 9, 3))
+    filled_positions = 1
+    for r in sampled_radii:
+        placed = False
+        i = 0
+        while not placed and i < max_iterations:
+            i += 1
+            x, y = np.random.random(2) * voxel_size
+            mirrors = _mirrored_circles((x, y), r, voxel_size)
+            if np.all(placed_circles == 0):
+                placed_circles[0] = x, y, r
+                for mirror, k in zip(mirrors, range(len(mirrors))):
+                    placed_mirrors[k] = mirror
+                placed = True
+            else:
+                intersects = False
+                for mirror_cand in mirrors:
+                    m_x, m_y, r = mirror_cand
+                    end = filled_positions * 9
+                    for mirror_stored in placed_mirrors[:end]:
+                        ms_x, ms_y, ms_r = mirror_stored
+                        if not _non_overlapping_circles(
+                            (m_x, m_y), r, (ms_x, ms_y), ms_r
+                        ):
+                            intersects = True
+                            break
+            if not intersects:
+                placed_circles[filled_positions] = x, y, r
+                interval = filled_positions * 9
+                for mirror, k in zip(mirrors, range(interval, len(mirrors) + interval)):
+                    placed_mirrors[k] = mirror
+                placed = True
+                filled_positions += 1
+    return placed_circles, placed_mirrors
 
 
-def cylinder_mesh(r, C, n_faces, h):
-  '''
-  Generate a cylindric mesh.
-  
-  Parameters
-  ----------
-  r: float
-      Radius of the circle. 
-  C: tuple
-      Center of circle C(x, y).
-  n_faces: int
-      Number of faces for the mesh.
-  h: int
-      Hight of the cylinder.
+def _cylinder_mesh(r, C, n_faces, h):
+    """Generate a cylindric mesh.
 
-  Returns
-  -------
-  vertices: numpy.ndarray
-      Array of vertices for the mesh.
-  faces: numpy.ndarray
-      Array of faces for the mesh.
-  '''
-  vertices = []
-  faces = []
-  thetas = np.linspace(0, 2*np.pi, n_faces+1)
-  for theta in thetas:
-    v_base = [r * np.sin(theta) + C[0], r * np.cos(theta) + C[1], 0]
-    v_h = [r * np.sin(theta) + C[0], r * np.cos(theta) + C[1], h]
-    vertices.append(v_base)
-    vertices.append(v_h)
-  indexes = range(len(vertices)-2)
-  for i in indexes:
-    t = [i, i+1, i+2]
-    faces.append(t)
-  connection_points = [[len(vertices)-1, len(vertices)-2, 1],[len(vertices)-2, 0, 1]]
-  for p in connection_points:
-    faces.append(p)
-  return np.array(vertices), np.array(faces)
+    Parameters
+    ----------
+    r: float
+        Radius of the circle.
+    C: tuple
+        Center of circle C(x, y).
+    n_faces: int
+        Number of faces for the mesh.
+    h: int
+        Hight of the cylinder.
+
+    Returns
+    -------
+    vertices: numpy.ndarray
+        Array of vertices for the mesh.
+    faces: numpy.ndarray
+        Array of faces for the mesh.
+    """
+    vertices = []
+    faces = []
+    thetas = np.linspace(0, 2 * np.pi, n_faces + 1)
+    for theta in thetas:
+        v_base = [r * np.sin(theta) + C[0], r * np.cos(theta) + C[1], 0]
+        v_h = [r * np.sin(theta) + C[0], r * np.cos(theta) + C[1], h]
+        vertices.append(v_base)
+        vertices.append(v_h)
+    indexes = range(len(vertices) - 2)
+    for i in indexes:
+        t = [i, i + 1, i + 2]
+        faces.append(t)
+    connection_points = [
+        [len(vertices) - 1, len(vertices) - 2, 1],
+        [len(vertices) - 2, 0, 1],
+    ]
+    for p in connection_points:
+        faces.append(p)
+    return np.array(vertices), np.array(faces)
 
 
 def packed_cylinders(n_objects, voxel_size, shape, scale, n_faces, h):
-  '''
-  Create a voxel of packed cylindric meshed with gamma distributed radii.
-  
-  Parameters
-  ----------
-  n_objects: int
-      Number of cylinders to be sampled.
-  voxel_size: float
-      Size of the voxel.
-  shape: float
-      The shape of the gamma distribution.
-  scale: float
-      The scale of the gamma distribution.
-  n_faces: int
-      Number of faces for the mesh.
-  h: int
-      Hight of the cylinders.
+    """Create a voxel of packed cylindric meshed with gamma distributed radii.
 
-  Returns
-  -------
-  vertices: numpy.ndarray
-      Array of vertices for the mesh.
-  faces: numpy.ndarray
-      Array of faces for the mesh.
-  '''
-  circles = sampling_circles(n_objects, shape, scale, voxel_size)[0] 
-  faces = []
-  vertices = []
-  for base in circles:
-    x, y, r = base[0], base[1], base[2]
-    v, f = cylinder_mesh(r, (x,y), n_faces, h)
-    faces.append(f)
-    vertices.append(v)
-  return np.asarray(vertices), np.asarray(faces)
+    Parameters
+    ----------
+    n_objects: int
+        Number of cylinders to be sampled.
+    voxel_size: float
+        Size of the voxel.
+    shape: float
+        The shape of the gamma distribution.
+    scale: float
+        The scale of the gamma distribution.
+    n_faces: int
+        Number of faces for the mesh.
+    h: int
+        Hight of the cylinders.
+
+    Returns
+    -------
+    vertices: numpy.ndarray
+        Array of vertices for the mesh.
+    faces: numpy.ndarray
+        Array of faces for the mesh.
+    """
+    circles = _sampling_circles(n_objects, shape, scale, voxel_size)[0]
+    faces = []
+    vertices = []
+    for base in circles:
+        x, y, r = base[0], base[1], base[2]
+        v, f = _cylinder_mesh(r, (x, y), n_faces, h)
+        faces.append(f)
+        vertices.append(v)
+    return np.asarray(vertices), np.asarray(faces)

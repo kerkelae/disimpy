@@ -7,6 +7,8 @@ microstructure.
 import numpy as np
 import numba
 
+import time
+
 
 class _Substrate:
     """Class for storing information about the simulated microstructure."""
@@ -306,11 +308,10 @@ def _triangle_box_overlap(triangle, box):
     e = np.eye(3)
 
     # Test the triangle AABB against the box
-    box_aabb = np.array(
-        [[np.min(v[:, i]) for i in range(3)], [np.max(v[:, i]) for i in range(3)]]
-    )
-    if np.all(box_aabb[0] > h) or np.all(box_aabb[1] < -h):
-        return False
+    triangle_aabb = _triangle_aabb(v)
+    for i in range(3):
+        if (triangle_aabb[1][i] < box[0][i] or triangle_aabb[0][i] > box[1][i]):
+            return False
 
     # Test the plane in which the triangle is against the box
     f = np.array(
@@ -453,6 +454,16 @@ def _box_subvoxel_overlap(box, xs, ys, zs):
     return subvoxels
 
 
+@numba.jit()
+def str_to_int(s):
+    """Convert string to int."""
+    
+    final_index, result = len(s) - 1, 0
+    for i,v in enumerate(s):
+        result += (ord(v) - 48) * (10 ** (final_index - i))
+    return result
+
+@numba.jit()   
 def _mesh_space_subdivision(vertices, faces, voxel_size, n_sv):
     """Divide the voxel into subvoxels and return arrays for finding the
     triangles in given a subvoxel.
@@ -495,7 +506,9 @@ def _mesh_space_subdivision(vertices, faces, voxel_size, n_sv):
     xs = np.linspace(0, voxel_size[0], n_sv[0] + 1)
     ys = np.linspace(0, voxel_size[1], n_sv[1] + 1)
     zs = np.linspace(0, voxel_size[2], n_sv[2] + 1)
-    relevant_triangles = [[] for _ in range(np.product(n_sv))]
+    prod = n_sv[0]*n_sv[1]*n_sv[2]
+    relevant_triangles = ["" for _ in range(prod)] 
+    len_triangles = ["" for _ in range(prod)]
 
     # Loop over the triangles
     for i, idx in enumerate(faces):
@@ -509,19 +522,33 @@ def _mesh_space_subdivision(vertices, faces, voxel_size, n_sv):
                     )
                     if _triangle_box_overlap(triangle, box):
                         subvoxel = x * n_sv[1] * n_sv[2] + y * n_sv[2] + z
-                        relevant_triangles[subvoxel].append(i)
+                        relevant_triangles[subvoxel] += (str(i)+"-")
+                        digits = len(str(i))
+                        len_triangles[subvoxel] += str(digits)
 
     # Make the final arrays
     triangle_indices = []
     subvoxel_indices = np.zeros((len(relevant_triangles), 2))
-    counter = 0
+    first_idx = 0
     for i, l in enumerate(relevant_triangles):
-        triangle_indices += l
-        subvoxel_indices[i, 0] = counter
-        subvoxel_indices[i, 1] = counter + len(l)
-        counter += len(l)
-    triangle_indices = np.array(triangle_indices).astype(int)
-    subvoxel_indices = subvoxel_indices.astype(int)
+      position = 0
+      if l == '':
+        subvoxel_indices[i,0] = first_idx
+        subvoxel_indices[i,1] = first_idx
+        continue
+      end = False
+      counter = 0 
+      subvoxel_indices[i, 0] = first_idx
+      while (end == False):
+        triangle= str_to_int(l[position:position+str_to_int(len_triangles[i][counter])])
+        triangle_indices.append(triangle)
+        counter += 1
+        if counter == len(len_triangles[i]):
+          subvoxel_indices[i, 1] = first_idx+counter
+          end = True
+        else:
+          position += str_to_int(len_triangles[i][counter-1])+1
+      first_idx += counter
     return xs, ys, zs, triangle_indices, subvoxel_indices
 
 

@@ -449,11 +449,6 @@ def test__aabb_to_mesh():
     return
 
 
-def test__non_overlapping_circles():
-    npt.assert_equal(substrates._non_overlapping_circles((1, 2), 1, (4, 3), 1), True)
-    return
-
-
 def test__mirrored_circles():
     mirrors = substrates._mirrored_circles((1, 1), 1, 3)
     mirrors_test = np.array(

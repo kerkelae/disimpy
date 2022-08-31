@@ -683,8 +683,8 @@ def dist_lineseg_point(p, a, b):
 
     Returns
     -------
-    boundaries : numpy.ndarray
-        Array with 2D boundaries of the voxel.
+    distance : numpy.ndarray
+        Distance between between point P(x,y) and line segment AB.
     """
     p = np.atleast_2d(p)
     d = np.divide(b - a, np.linalg.norm(b - a))
@@ -692,11 +692,12 @@ def dist_lineseg_point(p, a, b):
     t = np.dot(p - b, d)
     h = np.maximum.reduce([s, t, np.zeros(len(p))])
     c = np.cross(p - a, d)
-    return np.hypot(h, c)
+    distance = np.hypot(h, c)
+    return distance
 
 
 def _periodic_circles(mirrors, voxel_size):
-    """Distance between a point P(x,y) and a line segment AB.
+    """Selection of circles contained inside the voxel and interating with the boundaries.
 
     Parameters
     ----------

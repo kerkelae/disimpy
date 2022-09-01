@@ -617,7 +617,6 @@ def _mirrored_circles(C, r, voxel_size):
     return mirrors
 
 
-@numba.jit
 def _overlapping_mirrors(mirrors, placed_mirrors):
     """Check if any circle in a mirror position overlaps with other circles.
 
@@ -646,88 +645,6 @@ def _overlapping_mirrors(mirrors, placed_mirrors):
     return True
 
 
-def _boundaries(lower_b, higher_b):
-    """Define the 2D boundaries of the voxel.
-
-    Parameters
-    ----------
-    lower_b : float
-        Lower limit of the voxel.
-    higher_b : float
-        Upper limmit of the voxel.
-
-    Returns
-    -------
-    boundaries : numpy.ndarray
-        Array with 2D boundaries of the voxel.
-    """
-    top = [(lower_b, higher_b), (higher_b, higher_b)]
-    bottom = [(lower_b, lower_b), (higher_b, lower_b)]
-    left = [(lower_b, lower_b), (lower_b, higher_b)]
-    right = [(higher_b, lower_b), (higher_b, higher_b)]
-    boundaries = [bottom, left, top, right]
-    return np.asarray(boundaries)
-
-
-def dist_lineseg_point(p, a, b):
-    """Distance between a point P(x,y) and a line segment AB.
-
-    Parameters
-    ----------
-    p : numpy.ndarray
-        Array with the catesian coordinates of point P.
-    a : numpy.ndarray
-        Array with the catesian coordinates of point A.
-    b : numpy.ndarray
-        Array with the catesian coordinates of point B.
-
-    Returns
-    -------
-    distance : numpy.ndarray
-        Distance between between point P(x,y) and line segment AB.
-    """
-    p = np.atleast_2d(p)
-    d = np.divide(b - a, np.linalg.norm(b - a))
-    s = np.dot(a - p, d)
-    t = np.dot(p - b, d)
-    h = np.maximum.reduce([s, t, np.zeros(len(p))])
-    c = np.cross(p - a, d)
-    distance = np.hypot(h, c)
-    return distance
-
-
-def _periodic_circles(mirrors, voxel_size):
-    """Selection of circles contained inside the voxel and interating with the boundaries.
-
-    Parameters
-    ----------
-    mirrors : numpy.ndarray
-        Array with the catesian coordinates of point P.
-    voxel_size : float
-        Size of the voxel.
-
-    Returns
-    -------
-    periodic_circles : numpy.ndarray
-        Array with the periodically bounded circles.
-    """
-    boundaries = _boundaries(0, voxel_size)
-    periodic_circles = []
-    for mirror in mirrors:
-        x, y, r = mirror
-        if 0 <= x <= voxel_size and 0 <= y <= voxel_size:
-            periodic_circles.append(mirror)
-        for b in boundaries:
-            p1, p2 = b
-            p1 = np.asarray(p1)
-            p2 = np.asarray(p2)
-            d = dist_lineseg_point((x, y), p1, p2)
-            if d < r:
-                periodic_circles.append(mirror)
-    periodic_circles = np.unique(periodic_circles, axis=0)
-    return np.asarray(periodic_circles)
-
-
 @numba.jit
 def _place_circles(shape, scale, n_objects, voxel_size, max_iterations=1e2):
     """Pack circles in a voxel with periodic boundaries.
@@ -747,20 +664,24 @@ def _place_circles(shape, scale, n_objects, voxel_size, max_iterations=1e2):
 
     Returns
     -------
-    circles : numpy.ndarray
+    placed_circles : numpy.ndarray
         Array with the center coordinates and radii of the cirlces placed in the voxel.
+    placed_mirrors : numpy.ndarray
+        Array with the center coordinates and radii of the cirlces and mirrored circles placed in the voxel.
     """
-    radii = _sampled_radii(shape, scale, n_objects)
+    sampled_radii = _sampled_radii(shape, scale, n_objects)
+    placed_circles = np.zeros((n_objects, 3))
     placed_mirrors = np.zeros((n_objects * 9, 3))
     filled_positions = 1
-    for r in radii:
+    for r in sampled_radii:
         placed = False
         i = 0
         while not placed and i < max_iterations:
             i += 1
             x, y = np.random.random(2) * voxel_size
             mirrors = _mirrored_circles((x, y), r, voxel_size)
-            if np.all(placed_mirrors == 0):
+            if np.all(placed_circles == 0):
+                placed_circles[0] = x, y, r
                 for mirror, k in zip(mirrors, range(len(mirrors))):
                     placed_mirrors[k] = mirror
                 placed = True
@@ -770,6 +691,7 @@ def _place_circles(shape, scale, n_objects, voxel_size, max_iterations=1e2):
                     intersects = True
                     break
                 if not intersects:
+                    placed_circles[filled_positions] = x, y, r
                     interval = filled_positions * 9
                     for mirror, k in zip(
                         mirrors, range(interval, len(mirrors) + interval)
@@ -777,8 +699,7 @@ def _place_circles(shape, scale, n_objects, voxel_size, max_iterations=1e2):
                         placed_mirrors[k] = mirror
                     placed = True
                     filled_positions += 1
-    circles = _periodic_circles(placed_mirrors, voxel_size=1e-4)
-    return circles
+    return placed_circles, placed_mirrors
 
 
 def _intersection_points(C, r, voxel_size):
@@ -799,7 +720,11 @@ def _intersection_points(C, r, voxel_size):
         Array with the coordinates for the points of intersection - p1(x1,y1), p2(x2,y2).
     """
     x, y = C
-    boundaries = _boundaries(0, voxel_size)
+    top = [(0, voxel_size), (voxel_size, voxel_size)]
+    bottom = [(0, 0), (voxel_size, 0)]
+    left = [(0, 0), (0, voxel_size)]
+    right = [(voxel_size, 0), (voxel_size, voxel_size)]
+    boundaries = [bottom, left, top, right]
     points = []
     intersection_points = []
     for b in boundaries:
@@ -807,7 +732,7 @@ def _intersection_points(C, r, voxel_size):
         p1 = np.asarray(p1)
         p2 = np.asarray(p2)
         C = np.asarray(C)
-        d = dist_lineseg_point((x, y), p1, p2)
+        d = sp.linalg.norm(np.cross(p2 - p1, p1 - C)) / sp.linalg.norm(p2 - p1)
         if d < r:
             if p1[1] == p2[1]:
                 i1 = x - np.sqrt(r**2 - (p1[1] - y) ** 2), p1[1]
@@ -815,8 +740,8 @@ def _intersection_points(C, r, voxel_size):
             else:
                 i1 = p1[0], y - np.sqrt(r**2 - (p1[0] - x) ** 2)
                 i2 = p1[0], y + np.sqrt(r**2 - (p1[0] - x) ** 2)
-            points.append(i1)
-            points.append(i2)
+        points.append(i1)
+        points.append(i2)
     for point in points:
         xx, yy = point
         if 0 <= xx <= voxel_size and 0 <= yy <= voxel_size:
@@ -825,7 +750,7 @@ def _intersection_points(C, r, voxel_size):
 
 
 def _thetas(C, r, voxel_size, n_faces):
-    """Compute the theta angles for partial and complete circles to create the vertices and faces of a vertical mesh.
+    """Compute the theta angles for the partial and complete cylinders.
 
     Parameters
     ----------
@@ -840,10 +765,8 @@ def _thetas(C, r, voxel_size, n_faces):
 
     Returns
     -------
-    thetas : numpy.array
-        Array with the theta values of a circle.
-    len(intersection_points) : int
-        Number of intersection points between a circle and the boundaries.
+    intersection_points : numpy.array
+        Array with the coordinates for the points of intersection - p1(x1,y1), p2(x2,y2).
     """
     intersection_points = _intersection_points(C, r, voxel_size)
     if not len(intersection_points) == 0:
@@ -858,12 +781,11 @@ def _thetas(C, r, voxel_size, n_faces):
             thetas = np.linspace(max(angs), 2 * np.pi + min(angs), n_faces + 1)
     else:
         thetas = np.linspace(0, 2 * np.pi, n_faces + 1)
-    return thetas, len(intersection_points)
+    return thetas
 
 
-def _cylinder_mesh(C, r, voxel_size, n_faces, h):
-    """
-    Generate a cylinder from a triangular mesh.
+def _cylinder_mesh(C, r, n_faces, h, voxel_size):
+    """Generate a cylindric mesh.
 
     Parameters
     ----------
@@ -871,23 +793,23 @@ def _cylinder_mesh(C, r, voxel_size, n_faces, h):
         Center of circle C(x, y).
     r: float
         Radius of the circle.
-    voxel_size: float
-        Size of the voxel.
     n_faces: int
-        Number of faces for the triangular mesh.
+        Number of faces for the mesh.
     h: int
         Hight of the cylinder.
+    voxel_size: float
+        Size of the voxel.
 
     Returns
     -------
     vertices: numpy.ndarray
-        Array of vertices for the triangular mesh.
+        Array of vertices for the mesh.
     faces: numpy.ndarray
-        Array of faces for the triangular mesh.
+        Array of faces for the mesh.
     """
     vertices = []
     faces = []
-    thetas, partiality_tag = _thetas(C, r, voxel_size, n_faces)
+    thetas = _thetas(C, r, voxel_size, n_faces)
     for theta in thetas:
         v_base = [r * np.cos(theta) + C[0], r * np.sin(theta) + C[1], 0]
         v_h = [r * np.cos(theta) + C[0], r * np.sin(theta) + C[1], h]
@@ -897,48 +819,41 @@ def _cylinder_mesh(C, r, voxel_size, n_faces, h):
     for i in indexes:
         t = [i, i + 1, i + 2]
         faces.append(t)
-    if partiality_tag == 0:
-        connection_points = [
-            [len(vertices) - 1, len(vertices) - 2, 1],
-            [len(vertices) - 2, 0, 1],
-        ]
-        for p in connection_points:
-            faces.append(p)
     return np.array(vertices), np.array(faces)
 
 
-def packed_cylinders(shape, scale, n_objects, voxel_size, n_faces, h):
-    """
-    Create a voxel of packed cylindric meshes with gamma distributed radii and periodic boundaries.
+def packed_cylinders(n_objects, voxel_size, shape, scale, n_faces, h):
+    """Create a voxel of packed cylindric meshed with gamma distributed radii.
 
     Parameters
     ----------
-    shape: float
-        The shape of the gamma distribution.
-    scale: float
-        The scale of the gamma distribution.
     n_objects: int
         Number of cylinders to be sampled.
     voxel_size: float
         Size of the voxel.
+    shape: float
+        The shape of the gamma distribution.
+    scale: float
+        The scale of the gamma distribution.
     n_faces: int
-        Number of faces for the triangular meshes.
+        Number of faces for the mesh.
     h: int
         Hight of the cylinders.
 
     Returns
     -------
     vertices: numpy.ndarray
-        Array of vertices for the triangular meshes.
+        Array of vertices for the mesh.
     faces: numpy.ndarray
-        Array of faces for the triangular meshes.
+        Array of faces for the mesh.
     """
-    circles = _place_circles(shape, scale, n_objects, voxel_size)
-    faces = []
-    vertices = []
-    for base in circles:
+    circles = _place_circles(shape, scale, n_objects, voxel_size)[0]
+    vertices = np.empty((0, 3), int)
+    faces = np.empty((0, 3), int)
+    for base, i in zip(circles, range(len(circles))):
         x, y, r = base[0], base[1], base[2]
-        v, f = _cylinder_mesh((x, y), r, voxel_size, n_faces, h)
-        faces.append(f)
-        vertices.append(v)
+        v, f = _cylinder_mesh((x, y), r, n_faces, h, voxel_size)
+        f = f + (len(v) * i)
+        vertices = np.append(vertices, v, axis=0)
+        faces = np.append(faces, f, axis=0)
     return np.asarray(vertices), np.asarray(faces)

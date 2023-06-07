@@ -12,10 +12,16 @@ the appropriate Nvidia driver. You can check if your GPU is supported on
 Software requirements
 #####################
 
-You need the CUDA Toolkit version 8.0 or above which can be installed from
-`Nvidia <https://developer.nvidia.com/cuda-toolkit>`_ or using Conda as
-described in `Numba's documentation 
-<https://numba.pydata.org/numba-doc/dev/cuda/overview.html#software>`_. Make
+You need the following:
+
+- Numba (version 3.7.0 or above)
+- CUDA Toolkit (version 8.0 or above)
+
+It is recommended to `install Numba using Conda
+<https://numba.readthedocs.io/en/stable/user/installing.html>`_. CUDA Toolkit
+can be installed `using Conda 
+<https://numba.pydata.org/numba-doc/dev/cuda/overview.html#software>`_ or from
+`Nvidia <https://developer.nvidia.com/cuda-toolkit>`_. Make
 sure that the version you install supports your Nvidia driver or upgrade the
 driver. The driver requirements of each CUDA Toolkit version can be found in
 the `release notes <https://developer.nvidia.com/cuda-toolkit-archive>`_.
@@ -51,5 +57,5 @@ executing the following in the Python interpreter:
 
 .. code-block:: python
 
-   import disimpy.tests
-   disimpy.tests.test_all()
+   from disimpy.tests import test_all
+   test_all()

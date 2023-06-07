@@ -23,7 +23,7 @@ copyright = " Leevi Kerkelä"
 author = "Leevi Kerkelä"
 
 # The full version, including alpha/beta/rc tags
-release = "0.2.1"
+release = "0.3.0"
 
 
 # -- General configuration ---------------------------------------------------
@@ -54,26 +54,26 @@ exclude_patterns = [
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
-html_theme = "alabaster"
+html_theme = "furo"
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ["_static"]
 
+html_logo = "_static/logo.png"
+
 html_theme_options = {
-    "page_width": "1090px",  # Default is too narrow for standard notebooks
-    "description": "Massively parallel diffusion MR simulator written in Python.",
-    "logo": "logo.png",
-    "logo_name": True,
+    "sidebar_hide_name": True,
 }
-
-html_show_sourcelink = False
-
-html_sidebars = {"**": ["about.html", "navigation.html",]}
-
-
-# -- Other configuration -----------------------------------------------------
 
 # Specify master doc so build at read the docs won't fail
 master_doc = "index"
+
+# Syntax highlighting
+pygments_style = "stata"
+pygments_dark_style = "stata-dark"
+
+autodoc_default_options = {
+    "imported-members": True,
+}

@@ -71,8 +71,8 @@ anything by running all tests:
 
 .. code-block:: python
 
-   import disimpy.tests
-   disimpy.tests.test_all()
+   from disimpy.tests import test_all
+   test_all()
 
 Documentation
 #############

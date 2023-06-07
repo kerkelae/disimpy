@@ -26,8 +26,8 @@ that the `installation path is configured so that Numba can access it
 Installation
 ############
 
-It is recommended to install Disimpy in a virtual environment. The most recent
-release can be installed with pip:
+It is strongly recommended to install Disimpy in a virtual environment. The
+most recent release can be installed with pip:
 
 .. code-block::
 

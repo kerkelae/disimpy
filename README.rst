@@ -59,7 +59,7 @@ References
 Sponsors
 ########
 
-.. image:: docs/source/_static/nihr_gosh_brc_logo.png
+.. image:: https://disimpy.readthedocs.io/en/latest/_static/nihr_gosh_brc_logo.png
    :width: 418
    :alt: National Institute of Health Research Great Ormond Street Biomedical Research Centre
    :align: center
@@ -67,7 +67,7 @@ Sponsors
 
 |
 
-.. image:: docs/source/_static/gsoc_logo.png
+.. image:: https://disimpy.readthedocs.io/en/latest/_static/gsoc_logo.png
    :width: 200
    :alt: Google Summer of Code
    :align: center

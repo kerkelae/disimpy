@@ -71,7 +71,7 @@ html_theme_options = {
 master_doc = "index"
 
 # Syntax highlighting
-pygments_style = "stata"
+pygments_style = "stata-light"
 pygments_dark_style = "stata-dark"
 
 autodoc_default_options = {

@@ -55,3 +55,20 @@ References
        simulator for generating diffusion-weighted MRI data in Python. Journal
        of Open Source Software, 5(52), 2527.
        https://doi.org/10.21105/joss.02527
+
+Sponsors
+########
+
+.. image:: docs/source/_static/nihr_gosh_brc_logo.png
+   :width: 418
+   :alt: National Institute of Health Research Great Ormond Street Biomedical Research Centre
+   :align: center
+   :target: https://www.gosh.nhs.uk/our-research/our-research-infrastructure/nihr-great-ormond-street-hospital-brc/
+
+|
+
+.. image:: docs/source/_static/gsoc_logo.png
+   :width: 200
+   :alt: Google Summer of Code
+   :align: center
+   :target: https://summerofcode.withgoogle.com/

@@ -59,6 +59,8 @@ References
 Sponsors
 ########
 
+|
+
 .. image:: https://disimpy.readthedocs.io/en/latest/_static/nihr_gosh_brc_logo.png
    :width: 418
    :alt: National Institute of Health Research Great Ormond Street Biomedical Research Centre

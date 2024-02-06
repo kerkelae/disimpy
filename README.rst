@@ -74,3 +74,11 @@ Sponsors
    :alt: Google Summer of Code
    :align: center
    :target: https://summerofcode.withgoogle.com/
+
+|
+
+.. image:: https://disimpy.readthedocs.io/en/latest/_static/rh_logo.png
+   :width: 300
+   :alt: ResearchHub
+   :align: center
+   :target: https://www.researchhub.com/

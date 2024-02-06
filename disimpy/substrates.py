@@ -495,7 +495,7 @@ def _mesh_space_subdivision(vertices, faces, voxel_size, n_sv):
     xs = np.linspace(0, voxel_size[0], n_sv[0] + 1)
     ys = np.linspace(0, voxel_size[1], n_sv[1] + 1)
     zs = np.linspace(0, voxel_size[2], n_sv[2] + 1)
-    relevant_triangles = [[] for _ in range(np.product(n_sv))]
+    relevant_triangles = [[] for _ in range(np.prod(n_sv))]
 
     # Loop over the triangles
     for i, idx in enumerate(faces):

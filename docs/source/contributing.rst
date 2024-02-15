@@ -5,7 +5,7 @@ Contributing
 Contributions to Disimpy are warmly welcomed.
 
 If you want to discuss ideas before writing code, please open an `issue on
-GitHub <https://github.com/kerkelae/disimpy/issues>`_ and we'll discuss how to
+GitHub <https://github.com/kerkelae/disimpy/issues>`_, and we'll discuss how to
 continue. GitHub issues are also a great way to inform the developers about
 any bugs or problems you may encounter.
 
@@ -17,7 +17,7 @@ typos, improve documentation, etc.), please follow the steps below:
 
 1. Fork the `repository on GitHub <https://github.com/kerkelae/disimpy/>`_.
 2. Clone your fork:
-    
+
 .. code-block::
 
     git clone git@github.com:YOUR-USERNAME/disimpy.git
@@ -47,7 +47,10 @@ a-fork>`_.
 
 .. tip::
 
-   When making changes to the code, it is helpful to install the package in
+   When making changes to the code, it is recommended to use the `conda
+   environment
+   <https://conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html#creating-an-environment-from-an-environment-yml-file>`_
+   in the file ``development_environment.yml`` and to install the package in
    editable mode by executing the following in the root directory of the
    repository:
 
@@ -89,7 +92,7 @@ confirm that it works as expected by executing the following in
 This will generate a local copy of the documentation in ``docs/_build/html``.
 Once the changes are merged with the master branch, the online documentation is
 automatically updated. Requirements for generating the documentation locally
-are listed in ``docs/requirements.txt`` and they can be installed with pip:
+are listed in ``docs/requirements.txt``, and they can be installed with pip:
 
 .. code-block::
 

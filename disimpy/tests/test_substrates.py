@@ -267,22 +267,6 @@ def test_mesh():
         periodic=True,
         perm_prob=1.00002,
     )
-    npt.assert_raises(
-        ValueError,
-        substrates.mesh,
-        vertices=vertices,
-        faces=faces,
-        periodic=True,
-        perm_prob=1.0,
-    )
-    npt.assert_raises(
-        ValueError,
-        substrates.mesh,
-        vertices=vertices,
-        faces=faces,
-        periodic=True,
-        perm_prob=0.37,
-    )
     substrate = substrates.mesh(vertices, faces, True)
     npt.assert_equal(substrate.type, "mesh")
     return

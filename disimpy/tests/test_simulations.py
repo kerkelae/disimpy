@@ -267,7 +267,11 @@ def test__cuda_reflection():
         if thread_id >= r0.shape[0]:
             return
         simulations._cuda_reflection(
-            r0[thread_id, :], step[thread_id, :], d, normal[thread_id, :], epsilon,
+            r0[thread_id, :],
+            step[thread_id, :],
+            d,
+            normal[thread_id, :],
+            epsilon,
         )
         return
 
@@ -319,6 +323,40 @@ def test__cuda_reflection():
     stream.synchronize()
     npt.assert_almost_equal(step, np.array([[0.0, 0.0, 1.0]]))
     npt.assert_almost_equal(r0, np.array([[0.0, 0.0, epsilon]]))
+    return
+
+
+def test__cuda_crossing():
+
+    @cuda.jit()
+    def test_kernel(triangle, r0, step, step_l, epsilon):
+        thread_id = cuda.grid(1)
+        if thread_id >= r0.shape[0]:
+            return
+        r0 = r0[thread_id]
+        step = step[thread_id]
+        triangle = triangle[thread_id]
+        d = simulations._cuda_ray_triangle_intersection_check(triangle, r0, step)
+        if d > 0 and d < step_l:
+            normal = cuda.local.array(3, numba.float64)
+            simulations._cuda_triangle_normal(triangle, normal)
+            simulations._cuda_crossing(r0, step, d, normal, epsilon)
+        return
+
+    triangle = np.zeros((1, 3, 3))
+    triangle[:, 0, 2] = 1
+    triangle[:, 1, 0] = 1
+    triangle[:, 1, 2] = 1
+    triangle[:, 2, 1] = 1
+    triangle[:, 2, 2] = 1
+    r0 = np.array([0, 0, 0])[np.newaxis, ...]
+    step = np.array([0, 0, 1])[np.newaxis, ...]
+    step_l = 2
+    epsilon = 1e-10
+    stream = cuda.stream()
+    test_kernel[1, 128, stream](triangle, r0, step, step_l, epsilon)
+    stream.synchronize()
+    npt.assert_almost_equal(r0, np.array([[0.0, 0, 1 + epsilon]]))
     return
 
 
@@ -652,7 +690,9 @@ def test_mesh_diffusion():
     diffusivity = 2e-9
 
     mesh_path = os.path.join(
-        os.path.dirname(simulations.__file__), "tests", "cylinder_mesh_closed.pkl",
+        os.path.dirname(simulations.__file__),
+        "tests",
+        "cylinder_mesh_closed.pkl",
     )
     with open(mesh_path, "rb") as f:
         example_mesh = pickle.load(f)
@@ -723,7 +763,9 @@ def test_mesh_diffusion():
 
     # Test with a periodic mesh
     mesh_path = os.path.join(
-        os.path.dirname(simulations.__file__), "tests", "cylinder_mesh_open.pkl",
+        os.path.dirname(simulations.__file__),
+        "tests",
+        "cylinder_mesh_open.pkl",
     )
     with open(mesh_path, "rb") as f:
         example_mesh = pickle.load(f)
@@ -788,4 +830,3 @@ def test_mesh_diffusion():
         npt.assert_equal(np.all(np.max(pos, axis=0) < substrate.voxel_size), True)
         npt.assert_equal(np.all(np.min(pos, axis=0) > 0), True)
     return
-

@@ -28,6 +28,7 @@ class _Substrate:
             self.periodic = kwargs["periodic"]
             self.init_pos = kwargs["init_pos"]
             self.n_sv = kwargs["n_sv"]
+            self.perm_prob = kwargs["perm_prob"]
             if not kwargs["quiet"]:
                 print("Dividing the mesh into subvoxels")
             (
@@ -147,6 +148,7 @@ def mesh(
     init_pos="uniform",
     n_sv=np.array([50, 50, 50]),
     quiet=False,
+    perm_prob=0,
 ):
     """Return a substrate object for simulating diffusion restricted by a
     triangular mesh. The size of the simulated voxel is equal to the axis-
@@ -188,6 +190,8 @@ def mesh(
         algorithm.
     quiet : bool, optional
         If True, updates on computation progress are not printed.
+    perm_prob : float, optional
+        Probability that a spin passes through a triangle.
 
     Returns
     -------
@@ -234,6 +238,12 @@ def mesh(
         or not np.issubdtype(n_sv.dtype, np.integer)
     ):
         raise ValueError(f"Incorrect value ({n_sv}) for n_sv")
+    if (
+        (perm_prob != 0 and not isinstance(perm_prob, float))
+        or perm_prob < 0
+        or perm_prob > 1
+    ):
+        raise ValueError(f"Incorrect value ({perm_prob}) for perm_prob.")
     if not quiet:
         print("Aligning the corner of the simulated voxel with the origin")
     shift = -np.min(vertices, axis=0) + padding
@@ -254,6 +264,7 @@ def mesh(
         periodic=periodic,
         init_pos=init_pos,
         quiet=quiet,
+        perm_prob=perm_prob,
     )
     return substrate
 

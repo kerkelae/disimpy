@@ -92,7 +92,9 @@ def test_ellipsoid():
 
 def test_mesh():
     mesh_path = os.path.join(
-        os.path.dirname(substrates.__file__), "tests", "sphere_mesh.pkl",
+        os.path.dirname(substrates.__file__),
+        "tests",
+        "sphere_mesh.pkl",
     )
     with open(mesh_path, "rb") as f:
         example_mesh = pickle.load(f)
@@ -119,7 +121,11 @@ def test_mesh():
         periodic=True,
     )
     npt.assert_raises(
-        ValueError, substrates.mesh, vertices=vertices, faces="f", periodic=True,
+        ValueError,
+        substrates.mesh,
+        vertices=vertices,
+        faces="f",
+        periodic=True,
     )
     npt.assert_raises(
         ValueError,
@@ -143,7 +149,11 @@ def test_mesh():
         periodic=True,
     )
     npt.assert_raises(
-        ValueError, substrates.mesh, vertices=vertices, faces=faces, periodic=1,
+        ValueError,
+        substrates.mesh,
+        vertices=vertices,
+        faces=faces,
+        periodic=1,
     )
     npt.assert_raises(
         ValueError,
@@ -225,6 +235,38 @@ def test_mesh():
         periodic=True,
         n_sv=np.zeros((3)).astype(float),
     )
+    npt.assert_raises(
+        ValueError,
+        substrates.mesh,
+        vertices=vertices,
+        faces=faces,
+        periodic=True,
+        perm_prob=-5.3,
+    )
+    npt.assert_raises(
+        ValueError,
+        substrates.mesh,
+        vertices=vertices,
+        faces=faces,
+        periodic=True,
+        perm_prob="t",
+    )
+    npt.assert_raises(
+        ValueError,
+        substrates.mesh,
+        vertices=vertices,
+        faces=faces,
+        periodic=True,
+        perm_prob=1,
+    )
+    npt.assert_raises(
+        ValueError,
+        substrates.mesh,
+        vertices=vertices,
+        faces=faces,
+        periodic=True,
+        perm_prob=1.00002,
+    )
     substrate = substrates.mesh(vertices, faces, True)
     npt.assert_equal(substrate.type, "mesh")
     return
@@ -263,7 +305,10 @@ def test__triangle_box_overlap():
         ]
     )
     box = np.array(
-        [[0.33109806, 0.16637023, 0.91545459], [0.79806038, 0.83915475, 0.38118002],]
+        [
+            [0.33109806, 0.16637023, 0.91545459],
+            [0.79806038, 0.83915475, 0.38118002],
+        ]
     )
     npt.assert_equal(substrates._triangle_box_overlap(triangle, box), True)
     return
@@ -320,7 +365,9 @@ def test__box_subvoxel_overlap():
 
 def test__mesh_space_subdivision():
     mesh_path = os.path.join(
-        os.path.dirname(substrates.__file__), "tests", "sphere_mesh.pkl",
+        os.path.dirname(substrates.__file__),
+        "tests",
+        "sphere_mesh.pkl",
     )
     with open(mesh_path, "rb") as f:
         example_mesh = pickle.load(f)
@@ -356,7 +403,9 @@ def test__mesh_space_subdivision():
 def manual_test__mesh_space_subdivision(n_sv=np.array([3, 3, 3]), padding=np.zeros(3)):
     """Useful function for manually visualizing subvoxel division."""
     mesh_path = os.path.join(
-        os.path.dirname(substrates.__file__), "tests", "cylinder_mesh_closed.pkl",
+        os.path.dirname(substrates.__file__),
+        "tests",
+        "cylinder_mesh_closed.pkl",
     )
     with open(mesh_path, "rb") as f:
         example_mesh = pickle.load(f)

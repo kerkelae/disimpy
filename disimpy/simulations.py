@@ -177,8 +177,8 @@ def _cuda_line_circle_intersection(r0, step, radius):
     """
     A = step[0] ** 2 + step[1] ** 2
     B = 2 * (r0[0] * step[0] + r0[1] * step[1])
-    C = r0[0] ** 2 + r0[1] ** 2 - radius ** 2
-    d = (-B + math.sqrt(B ** 2 - 4 * A * C)) / (2 * A)
+    C = r0[0] ** 2 + r0[1] ** 2 - radius**2
+    d = (-B + math.sqrt(B**2 - 4 * A * C)) / (2 * A)
     return d
 
 
@@ -198,7 +198,7 @@ def _cuda_line_sphere_intersection(r0, step, radius):
     float
     """
     dp = _cuda_dot_product(step, r0)
-    d = -dp + math.sqrt(dp ** 2 - (_cuda_dot_product(r0, r0) - radius ** 2))
+    d = -dp + math.sqrt(dp**2 - (_cuda_dot_product(r0, r0) - radius**2))
     return d
 
 
@@ -227,7 +227,7 @@ def _cuda_line_ellipsoid_intersection(r0, step, semiaxes):
         + c ** (-2) * step[2] * r0[2]
     )
     C = (r0[0] / a) ** 2 + (r0[1] / b) ** 2 + (r0[2] / c) ** 2 - 1
-    d = (-B + math.sqrt(B ** 2 - 4 * A * C)) / (2 * A)
+    d = (-B + math.sqrt(B**2 - 4 * A * C)) / (2 * A)
     return d
 
 
@@ -306,6 +306,38 @@ def _cuda_reflection(r0, step, d, normal, epsilon):
     for i in range(3):
         step[i] = (v[i] - 2 * dp * normal[i] + intersection[i]) - intersection[i]
     _cuda_normalize_vector(step)
+    for i in range(3):  # Move walker slightly away from the surface
+        r0[i] = intersection[i] + epsilon * normal[i]
+    return
+
+
+@numba.jit(nopython=True)
+def _cuda_crossing(r0, step, d, normal, epsilon):
+    """Make the random walker pass through the triangle and update r0. Epsilon
+    is the amount by which the new position differs from the surface.
+
+    Parameters
+    ----------
+    r0 : numba.cuda.cudadrv.devicearray.DeviceNDArray
+    step : numba.cuda.cudadrv.devicearray.DeviceNDArray
+    d : float
+    normal : numba.cuda.cudadrv.devicearray.DeviceNDArray
+    semiaxes : numba.cuda.cudadrv.devicearray.DeviceNDArray
+    epsilon : float
+
+    Returns
+    -------
+    None
+    """
+    intersection = cuda.local.array(3, numba.float64)
+    v = cuda.local.array(3, numba.float64)
+    for i in range(3):
+        intersection[i] = r0[i] + d * step[i]
+        v[i] = intersection[i] - r0[i]
+    dp = _cuda_dot_product(v, normal)
+    if dp < 0:  # Make sure the normal vector points to the other side of the triangle
+        for i in range(3):
+            normal[i] *= -1
     for i in range(3):  # Move walker slightly away from the surface
         r0[i] = intersection[i] + epsilon * normal[i]
     return
@@ -865,6 +897,7 @@ def _cuda_step_mesh(
     max_iter,
     n_sv,
     epsilon,
+    perm_prob,
 ):
     """Kernel function for diffusion restricted by a triangular mesh."""
 
@@ -950,13 +983,18 @@ def _cuda_step_mesh(
                             min_d = d
 
         # Check if step intersects with the closest triangle
-        if min_d < step_l:
+        if min_d > step_l:
+            check_intersection = False
+        elif perm_prob < xoroshiro128p_uniform_float64(rng_states, thread_id):
             _cuda_get_triangle(closest_triangle_index, vertices, faces, triangle)
             _cuda_triangle_normal(triangle, normal)
             _cuda_reflection(r0, step, min_d, normal, epsilon)
             step_l -= min_d
         else:
-            check_intersection = False
+            _cuda_get_triangle(closest_triangle_index, vertices, faces, triangle)
+            _cuda_triangle_normal(triangle, normal)
+            _cuda_crossing(r0, step, min_d, normal, epsilon)
+            step_l -= min_d
 
     if iter_idx >= max_iter:
         iter_exc[thread_id] = True
@@ -1159,7 +1197,15 @@ def simulation(
         # Run simulation
         for t in range(gradient.shape[1]):
             _cuda_step_free[gs, bs, stream](
-                d_positions, d_g_x, d_g_y, d_g_z, d_phases, rng_states, t, step_l, dt,
+                d_positions,
+                d_g_x,
+                d_g_y,
+                d_g_z,
+                d_phases,
+                rng_states,
+                t,
+                step_l,
+                dt,
             )
             stream.synchronize()
             if traj:
@@ -1342,6 +1388,7 @@ def simulation(
                 max_iter,
                 d_n_sv,
                 epsilon,
+                substrate.perm_prob,
             )
             stream.synchronize()
             time.sleep(1e-2)

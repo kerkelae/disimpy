@@ -6,7 +6,8 @@
 
    installation
    tutorial
-   modules_and_functions
-   contributing
    validation
+   reference
+   contributing
+   publications
    View on GitHub <https://github.com/kerkelae/disimpy>

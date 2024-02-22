@@ -78,36 +78,34 @@ def show_traj(traj_file):
     return
 
 
-def show_mesh(substrate):
+def show_mesh(substrate, seed=123):
     """Visualize a triangular mesh with random triangle colours.
 
     Parameters
     ----------
     substrate : disimpy.substrates._Substrate
         Substrate object containing the triangular mesh.
+    seed : int, optional
+        Seed for pseudorandom number generation.
 
     Returns
     -------
     None
     """
-    np.random.seed(123)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        # The code below often resulted in a runtime warning so ignore warnings
-        # as a temporary solution
-        fig = plt.figure()
-        ax = fig.add_subplot(111, projection="3d")
-        for idx in substrate.faces:
-            tri = Poly3DCollection(substrate.vertices[idx], alpha=0.5)
-            tri.set_facecolor(np.random.random(3))
-            ax.add_collection3d(tri)
-        ax.set_xlim([0, substrate.voxel_size[0]])
-        ax.set_ylim([0, substrate.voxel_size[1]])
-        ax.set_zlim([0, substrate.voxel_size[2]])
-        ax.set_xlabel("x")
-        ax.set_ylabel("y")
-        ax.set_zlabel("z")
-        ax.ticklabel_format(style="sci", scilimits=(0, 0))
-        fig.tight_layout()
-        plt.show()
+    np.random.seed(seed)
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection="3d")
+    for idx in substrate.faces:
+        tri = Poly3DCollection([substrate.vertices[idx]], alpha=0.5)
+        tri.set_facecolor(np.random.random(3))
+        ax.add_collection3d(tri)
+    ax.set_xlim([0, substrate.voxel_size[0]])
+    ax.set_ylim([0, substrate.voxel_size[1]])
+    ax.set_zlim([0, substrate.voxel_size[2]])
+    ax.set_xlabel("x")
+    ax.set_ylabel("y")
+    ax.set_zlabel("z")
+    ax.ticklabel_format(style="sci", scilimits=(0, 0))
+    fig.tight_layout()
+    plt.show()
     return

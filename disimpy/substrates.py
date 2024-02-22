@@ -264,7 +264,7 @@ def mesh(
     return substrate
 
 
-@numba.jit()
+@numba.jit(nopython=True)
 def _cross_product(a, b):
     """Compiled function for calculating the cross product between two 1D
     arrays of length 3."""
@@ -275,14 +275,14 @@ def _cross_product(a, b):
     return c
 
 
-@numba.jit()
+@numba.jit(nopython=True)
 def _dot_product(a, b):
     """Compiled function for calculating the dot product between two 1D arrays
     of length 3."""
     return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
 
 
-@numba.jit()
+@numba.jit(nopython=True)
 def _triangle_box_overlap(triangle, box):
     """Check if a triangle overlaps with a box.
 
@@ -363,7 +363,7 @@ def _triangle_box_overlap(triangle, box):
     return True
 
 
-@numba.jit()
+@numba.jit(nopython=True)
 def _interval_sv_overlap(xs, x1, x2):
     """Return the indices of subvoxels that overlap with interval [x1, x2].
 
@@ -414,7 +414,7 @@ def _interval_sv_overlap(xs, x1, x2):
             return ll - 1, ul
 
 
-@numba.jit()
+@numba.jit(nopython=True)
 def _triangle_aabb(triangle):
     """Calculate the axis-aligned bounding box of a triangle and return its
     closest and furthest points to the origin.
@@ -436,7 +436,7 @@ def _triangle_aabb(triangle):
     return aabb
 
 
-@numba.jit()
+@numba.jit(nopython=True)
 def _box_subvoxel_overlap(box, xs, ys, zs):
     """Find the subvoxels which with a box overlaps and return the lowest and
     highest index of the subvoxels along each axis.
@@ -501,7 +501,7 @@ def _mesh_space_subdivision(vertices, faces, voxel_size, n_sv):
     xs = np.linspace(0, voxel_size[0], n_sv[0] + 1)
     ys = np.linspace(0, voxel_size[1], n_sv[1] + 1)
     zs = np.linspace(0, voxel_size[2], n_sv[2] + 1)
-    relevant_triangles = [[] for _ in range(np.product(n_sv))]
+    relevant_triangles = [[] for _ in range(np.prod(n_sv))]
 
     # Loop over the triangles
     for i, idx in enumerate(faces):

@@ -151,7 +151,7 @@ def pgse(delta, DELTA, n_t, bvals, bvecs):
     DELTA : float
         Diffusion time.
     n_t : int
-        The number of time points in the generated gradient array. 
+        The number of time points in the generated gradient array.
     bvals : float or numpy.ndarray
         b-value or an array of b-values.
     bvecs : numpy.ndarray
@@ -162,7 +162,7 @@ def pgse(delta, DELTA, n_t, bvals, bvecs):
     gradient : numpy.ndarray
         Gradient array.
     dt : float
-        Duration of a time step in the gradient array.   
+        Duration of a time step in the gradient array.
     """
     gradient = np.zeros((1, int(1e6), 3))
     T = delta + DELTA
@@ -176,4 +176,39 @@ def pgse(delta, DELTA, n_t, bvals, bvecs):
     for i, bvec in enumerate(bvecs):
         Rs[i] = utils.vec2vec_rotmat(np.array([1.0, 0.0, 0.0]), bvec)
     gradient = rotate_gradient(gradient, Rs)
+    return gradient, dt
+
+
+def load_camino_scheme_file(path):
+    """Generate a gradient array from a Camino general waveform scheme file. All
+    waveforms must have the same number of steps and the same time step
+    duration. For details, see
+    http://camino.cs.ucl.ac.uk/index.php?n=Tutorials.GenwaveTutorial.
+
+    Parameters
+    ----------
+    path : str
+        Path to the Camino scheme file.
+
+    Returns
+    -------
+    gradient : numpy.ndarray
+        Gradient array.
+    dt : float
+        Duration of a time step in the gradient array.
+    """
+    with open(path, "r") as file:
+        if file.readline().strip() != "VERSION: GRADIENT_WAVEFORM":
+            raise Exception(
+                "The scheme file does not start with 'VERSION: GRADIENT_WAVEFORM'"
+            )
+    scheme = np.loadtxt(path, skiprows=1)
+    dts = scheme[:, 1]
+    if len(set(dts)) != 1:
+        raise Exception(
+            "Not all rows of the scheme file have the same time step duration. "
+            "Disimpy does not support scheme files with multiple time step durations."
+        )
+    dt = dts[0]
+    gradient = scheme[:, 2::].reshape(len(scheme), -1, 3)
     return gradient, dt

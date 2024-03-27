@@ -1,5 +1,7 @@
 """This module contains tests of the gradients module."""
 
+import os
+
 import numpy as np
 import numpy.testing as npt
 
@@ -106,4 +108,23 @@ def test_pgse():
     npt.assert_almost_equal(
         gradient[:, 1] / np.linalg.norm(gradient[:, 1], axis=1), bvecs
     )
+    return
+
+
+def test_load_camino_scheme_file():
+    gradient = np.zeros((1, 100, 3))
+    gradient[0, 1:30, 0] = 1
+    gradient[0, 70:99, 0] = -1
+    T = 80e-3
+    n_t = int(1e3)
+    dt = T / (gradient.shape[1] - 1)
+    gradient, dt = gradients.interpolate_gradient(gradient, dt, n_t)
+    bs = np.linspace(0, 3e9, 100)
+    gradient = np.concatenate([gradient for _ in bs], axis=0)
+    gradient = gradients.set_b(gradient, dt, bs)
+    gradient_camino, dt_camino = gradients.load_camino_scheme_file(
+        os.path.join(os.path.dirname(gradients.__file__), "tests", "camino.scheme")
+    )
+    npt.assert_almost_equal(gradient_camino, gradient)
+    npt.assert_almost_equal(dt_camino, dt)
     return

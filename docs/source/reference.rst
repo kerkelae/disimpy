@@ -9,6 +9,7 @@ Reference
 .. autofunction:: disimpy.gradients.calc_b
 .. autofunction:: disimpy.gradients.calc_q
 .. autofunction:: disimpy.gradients.interpolate_gradient
+.. autofunction:: disimpy.gradients.load_camino_scheme_file
 .. autofunction:: disimpy.gradients.pgse
 .. autofunction:: disimpy.gradients.rotate_gradient
 .. autofunction:: disimpy.gradients.set_b

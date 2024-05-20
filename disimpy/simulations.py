@@ -679,7 +679,7 @@ def _cuda_step_free(positions, g_x, g_y, g_z, phases, rng_states, t, step_l, dt)
     step = cuda.local.array(3, numba.float64)
     _cuda_random_step(step, rng_states, thread_id)
     for i in range(3):
-        positions[thread_id, i] = positions[thread_id, i] + step[i] * step_l
+        positions[thread_id, i] += step[i] * step_l
     for m in range(g_x.shape[0]):
         phases[m, thread_id] += (
             GAMMA

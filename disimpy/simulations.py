@@ -444,12 +444,9 @@ def _cuda_fill_mesh(
     # Find the subvoxels the ray intersects
     lls = cuda.local.array(3, numba.int64)
     uls = cuda.local.array(3, numba.int64)
-    lls[0] = _ll_subvoxel_overlap(xs, point[0], point[0] + ray[0])
-    lls[1] = _ll_subvoxel_overlap(ys, point[1], point[1] + ray[1])
-    lls[2] = _ll_subvoxel_overlap(zs, point[2], point[2] + ray[2])
-    uls[0] = _ul_subvoxel_overlap(xs, point[0], point[0] + ray[0])
-    uls[1] = _ul_subvoxel_overlap(ys, point[1], point[1] + ray[1])
-    uls[2] = _ul_subvoxel_overlap(zs, point[2], point[2] + ray[2])
+    for i in range(3):
+        lls[i] = _ll_subvoxel_overlap(xs, point[i], point[i] + ray[i])
+        uls[i] = _ul_subvoxel_overlap(xs, point[i], point[i] + ray[i])
 
     # Keep track of the number of intersections and the triangles. The max
     # number of intersections allowed is 1000. Increase this number for very
@@ -514,12 +511,7 @@ def _fill_mesh(n_points, substrate, intra, seed, cuda_bs=128):
     stream = cuda.stream()
     rng_states = create_xoroshiro128p_states(gs * bs, seed=seed, stream=stream)
 
-    if substrate.periodic:
-        d_vertices = cuda.to_device(substrate.vertices, stream=stream)
-        d_faces = cuda.to_device(substrate.faces, stream=stream)
-        d_subvoxel_indices = cuda.to_device(substrate.subvoxel_indices, stream=stream)
-        d_triangle_indices = cuda.to_device(substrate.triangle_indices, stream=stream)
-    else:  # Don't include the voxel boundaries
+    if not substrate.periodic:  # don't include the voxel boundaries
         vertices = np.copy(substrate.vertices[0:-8])
         faces = np.copy(substrate.faces[0:-12])
         triangle_indices = np.copy(substrate.triangle_indices)
@@ -531,17 +523,24 @@ def _fill_mesh(n_points, substrate, intra, seed, cuda_bs=128):
                     subvoxel_indices[j, :] -= 1
             triangle_indices = np.delete(triangle_indices, i - n_deleted)
         subvoxel_indices[subvoxel_indices < 0] = 0
-        d_vertices = cuda.to_device(vertices, stream=stream)
-        d_faces = cuda.to_device(faces, stream=stream)
-        d_subvoxel_indices = cuda.to_device(subvoxel_indices, stream=stream)
-        d_triangle_indices = cuda.to_device(triangle_indices, stream=stream)
+    else:
+        vertices = substrate.vertices
+        faces = substrate.faces
+        subvoxel_indices = substrate.subvoxel_indices
+        triangle_indices = substrate.triangle_indices
+
+    d_vertices = cuda.to_device(vertices, stream=stream)
+    d_faces = cuda.to_device(faces, stream=stream)
+    d_subvoxel_indices = cuda.to_device(subvoxel_indices, stream=stream)
+    d_triangle_indices = cuda.to_device(triangle_indices, stream=stream)
     d_voxel_size = cuda.to_device(substrate.voxel_size, stream=stream)
     d_xs = cuda.to_device(substrate.xs, stream=stream)
     d_ys = cuda.to_device(substrate.ys, stream=stream)
     d_zs = cuda.to_device(substrate.zs, stream=stream)
     d_n_sv = cuda.to_device(substrate.n_sv, stream=stream)
+
     points_sampled = False
-    points = np.array([])
+    points = None
     while not points_sampled:
         new_points = np.ones((n_points, 3)).astype(np.float64) * math.inf
         d_points = cuda.to_device(new_points, stream=stream)
@@ -561,10 +560,11 @@ def _fill_mesh(n_points, substrate, intra, seed, cuda_bs=128):
         )
         stream.synchronize()
         new_points = d_points.copy_to_host(stream=stream)
-        if len(points) == 0:
-            points = new_points[~np.isinf(new_points)[:, 0]]
-        else:
-            points = np.vstack((points, new_points[~np.isinf(new_points)[:, 0]]))
+        points = (
+            np.vstack((points, new_points[~np.isinf(new_points)[:, 0]]))
+            if points is not None
+            else new_points[~np.isinf(new_points)[:, 0]]
+        )
         if points.shape[0] >= n_points:
             points_sampled = True
     return points[0:n_points]

@@ -53,7 +53,6 @@ def _cuda_cross_product(a, b, c):
     c[0] = a[1] * b[2] - a[2] * b[1]
     c[1] = a[2] * b[0] - a[0] * b[2]
     c[2] = a[0] * b[1] - a[1] * b[0]
-    return
 
 
 @cuda.jit(device=True)
@@ -71,7 +70,6 @@ def _cuda_normalize_vector(v):
     length = math.sqrt(_cuda_dot_product(v, v))
     for i in range(3):
         v[i] = v[i] / length
-    return
 
 
 @cuda.jit(device=True)
@@ -94,7 +92,6 @@ def _cuda_triangle_normal(triangle, normal):
         k[i] = triangle[0, i] - triangle[2, i]
     _cuda_cross_product(v, k, normal)
     _cuda_normalize_vector(normal)
-    return
 
 
 @cuda.jit(device=True)
@@ -115,7 +112,6 @@ def _cuda_get_triangle(i, vertices, faces, triangle):
     for a in range(3):
         for b in range(3):
             triangle[a, b] = vertices[faces[i, a], b]
-    return
 
 
 @cuda.jit(device=True)
@@ -135,7 +131,6 @@ def _cuda_random_step(step, rng_states, thread_id):
     for i in range(3):
         step[i] = xoroshiro128p_normal_float64(rng_states, thread_id)
     _cuda_normalize_vector(step)
-    return
 
 
 @cuda.jit(device=True)
@@ -157,7 +152,6 @@ def _cuda_mat_mul(R, v):
     rotated_v[2] = R[2, 0] * v[0] + R[2, 1] * v[1] + R[2, 2] * v[2]
     for i in range(3):
         v[i] = rotated_v[i]
-    return
 
 
 @cuda.jit(device=True)
@@ -308,7 +302,6 @@ def _cuda_reflection(r0, step, d, normal, epsilon):
     _cuda_normalize_vector(step)
     for i in range(3):  # Move walker slightly away from the surface
         r0[i] = intersection[i] + epsilon * normal[i]
-    return
 
 
 @numba.jit(nopython=True)
@@ -340,14 +333,12 @@ def _cuda_crossing(r0, step, d, normal, epsilon):
             normal[i] *= -1
     for i in range(3):  # Move walker slightly away from the surface
         r0[i] = intersection[i] + epsilon * normal[i]
-    return
 
 
 @numba.jit(nopython=True)
 def _set_seed(seed):
     """Set the pseudorandom number generator seed for compiled functions."""
     np.random.seed(seed)
-    return
 
 
 @numba.jit(nopython=True)
@@ -499,7 +490,6 @@ def _cuda_fill_mesh(
         if n_intersections % 2 == 0:  # Point is outside the surface
             for i in range(3):
                 points[thread_id, i] = point[i]
-    return
 
 
 def _fill_mesh(n_points, substrate, intra, seed, cuda_bs=128):
@@ -699,7 +689,6 @@ def _cuda_step_free(positions, g_x, g_y, g_z, phases, rng_states, t, step_l, dt)
                 + (g_z[m, t] * positions[thread_id, 2])
             )
         )
-    return
 
 
 @cuda.jit()
@@ -753,7 +742,6 @@ def _cuda_step_sphere(
                 + (g_z[m, t] * positions[thread_id, 2])
             )
         )
-    return
 
 
 @cuda.jit()
@@ -813,7 +801,6 @@ def _cuda_step_cylinder(
                 + (g_z[m, t] * positions[thread_id, 2])
             )
         )
-    return
 
 
 @cuda.jit()
@@ -872,7 +859,6 @@ def _cuda_step_ellipsoid(
                 + (g_z[m, t] * positions[thread_id, 2])
             )
         )
-    return
 
 
 @cuda.jit()
@@ -1010,7 +996,6 @@ def _cuda_step_mesh(
                 + (g_z[m, t] * positions[thread_id, 2])
             )
         )
-    return
 
 
 def add_noise_to_data(data, sigma, seed=None):
@@ -1045,7 +1030,6 @@ def _write_traj(traj, mode, positions):
     with open(traj, mode) as f:
         [f.write(str(i) + " ") for i in positions.ravel()]
         f.write("\n")
-    return
 
 
 def simulation(

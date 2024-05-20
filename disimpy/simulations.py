@@ -257,16 +257,17 @@ def _cuda_ray_triangle_intersection_check(triangle, r0, step):
     _cuda_cross_product(step, E_2, P)
     _cuda_cross_product(T, E_1, Q)
     det = _cuda_dot_product(P, E_1)
-    if det != 0:
-        t = 1 / det * _cuda_dot_product(Q, E_2)
-        u = 1 / det * _cuda_dot_product(P, T)
-        v = 1 / det * _cuda_dot_product(Q, step)
+    if det == 0:
+        return np.nan
+    else:
+        det_inv = 1 / det
+        t = det_inv * _cuda_dot_product(Q, E_2)
+        u = det_inv * _cuda_dot_product(P, T)
+        v = det_inv * _cuda_dot_product(Q, step)
         if u >= 0 and u <= 1 and v >= 0 and v <= 1 and u + v <= 1:
             return t
         else:
             return np.nan
-    else:
-        return np.nan
 
 
 @numba.jit(nopython=True)

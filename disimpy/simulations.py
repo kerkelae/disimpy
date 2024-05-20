@@ -69,7 +69,7 @@ def _cuda_normalize_vector(v):
     """
     length = math.sqrt(_cuda_dot_product(v, v))
     for i in range(3):
-        v[i] = v[i] / length
+        v[i] /= length
 
 
 @cuda.jit(device=True)

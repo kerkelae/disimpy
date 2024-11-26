@@ -479,3 +479,54 @@ def test__aabb_to_mesh():
     )
     npt.assert_equal(substrates._aabb_to_mesh(box[0], box[1]), (vertices, faces))
     return
+
+
+def test__mirrored_circles():
+    mirrors = substrates._mirrored_circles((1, 1), 1, 3)
+    mirrors_test = np.array(
+        [
+            [1, 1, 1],
+            [-2, 1, 1],
+            [4, 1, 1],
+            [1, -2, 1],
+            [1, 4, 1],
+            [-2, -2, 1],
+            [4, -2, 1],
+            [-2, 4, 1],
+            [4, 4, 1],
+        ]
+    )
+    npt.assert_equal(mirrors, mirrors_test)
+    return
+
+
+def test__cylinder_mesh():
+    r = 1e-6
+    C = (0, 0)
+    n_faces = 100
+    h = 10e-6
+    vertices, faces = substrates._cylinder_mesh(r, C, n_faces, h)
+    npt.assert_equal(vertices.shape, ((n_faces * 2) + 2, 3))
+    npt.assert_equal(faces.shape, ((n_faces * 2) + 2, 3))
+    npt.assert_equal(vertices.shape, faces.shape)
+    npt.assert_equal(np.all(vertices[::2] == 0), True)
+    npt.assert_equal(np.all(vertices[1::2] == h), True)
+    return
+
+
+def test_packed_cylinders():
+    n_objects = int(5e2)
+    voxel_size = 1e-4
+    shape = 3
+    scale = 1e-6
+    n_faces = 50
+    h = 10e-6
+    vertices, faces = substrates.packed_cylinders(
+        n_objects, voxel_size, shape, scale, n_faces, h
+    )
+    npt.assert_equal(vertices.shape, (n_objects, (n_faces * 2) + 2, 3))
+    npt.assert_equal(faces.shape, (n_objects, (n_faces * 2) + 2, 3))
+    npt.assert_equal(vertices.shape, faces.shape)
+    npt.assert_equal(np.all(vertices[::2] == 0), True)
+    npt.assert_equal(np.all(vertices[1::2] == h), True)
+    return

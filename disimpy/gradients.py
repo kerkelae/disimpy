@@ -86,7 +86,7 @@ def calc_b(gradient, dt):
         b-values.
     """
     q = calc_q(gradient, dt)
-    b = np.trapz(np.linalg.norm(q, axis=2) ** 2, axis=1, dx=dt)
+    b = np.trapezoid(np.linalg.norm(q, axis=2) ** 2, axis=1, dx=dt)
     return b
 
 

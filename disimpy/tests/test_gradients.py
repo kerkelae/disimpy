@@ -38,7 +38,7 @@ def test_calc_q():
     for i in np.linspace(0, gradient.shape[1] - 1, 10).astype(int):
         npt.assert_almost_equal(
             q[:, i - 1, :],
-            gradients.GAMMA * np.trapz(gradient[:, 0:i, :], dx=dt, axis=1),
+            gradients.GAMMA * np.trapezoid(gradient[:, 0:i, :], dx=dt, axis=1),
         )
     return
 

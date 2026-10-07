@@ -8,6 +8,7 @@ import pickle
 import numpy as np
 from numba import cuda
 import numpy.testing as npt
+import pytest
 from scipy.stats import normaltest, kstest
 from numba.cuda.random import (
     create_xoroshiro128p_states,
@@ -18,6 +19,7 @@ from .. import gradients, simulations, substrates, utils
 
 
 SEED = 123
+pytestmark = pytest.mark.gpu
 
 
 def test__cuda_dot_product():
@@ -466,7 +468,7 @@ def example_gradient():
     return gradient, dt
 
 
-def test_free_diffusion():
+def test_free_diffusion(tmp_path):
 
     # Signal
     n_s = int(1e5)
@@ -486,9 +488,7 @@ def test_free_diffusion():
     n_t = int(1e2)
     gradient, dt = example_gradient()
     gradient, dt = gradients.interpolate_gradient(gradient, dt, n_t)
-    traj_file = os.path.join(
-        os.path.dirname(simulations.__file__), "tests", "example_traj.txt"
-    )
+    traj_file = str(tmp_path / "example_traj.txt")
     signals = simulations.simulation(
         n_s, diffusivity, gradient, dt, substrate, traj=traj_file
     )
@@ -500,7 +500,7 @@ def test_free_diffusion():
     return
 
 
-def test_cylinder_diffusion():
+def test_cylinder_diffusion(tmp_path):
 
     # Walker trajectories
     n_s = int(1e2)
@@ -508,9 +508,7 @@ def test_cylinder_diffusion():
     diffusivity = 2e-9
     gradient, dt = example_gradient()
     gradient, dt = gradients.interpolate_gradient(gradient, dt, n_t)
-    traj_file = os.path.join(
-        os.path.dirname(simulations.__file__), "tests", "example_traj.txt"
-    )
+    traj_file = str(tmp_path / "example_traj.txt")
     for radius in [1e-6, 5e-6, 1e-3]:
         substrate = substrates.cylinder(
             radius=radius, orientation=np.array([1.0, 0, 0])
@@ -589,7 +587,7 @@ def test_cylinder_diffusion():
     return
 
 
-def test_sphere_diffusion():
+def test_sphere_diffusion(tmp_path):
 
     # Walker trajectories
     n_s = int(1e2)
@@ -597,9 +595,7 @@ def test_sphere_diffusion():
     diffusivity = 2e-9
     gradient, dt = example_gradient()
     gradient, dt = gradients.interpolate_gradient(gradient, dt, n_t)
-    traj_file = os.path.join(
-        os.path.dirname(simulations.__file__), "tests", "example_traj.txt"
-    )
+    traj_file = str(tmp_path / "example_traj.txt")
     radius = 5e-6
     substrate = substrates.sphere(radius)
     signals = simulations.simulation(
@@ -654,7 +650,7 @@ def test_sphere_diffusion():
     return
 
 
-def test_ellipsoid_diffusion():
+def test_ellipsoid_diffusion(tmp_path):
 
     # Walker trajectories
     n_s = int(1e2)
@@ -662,9 +658,7 @@ def test_ellipsoid_diffusion():
     diffusivity = 2e-9
     gradient, dt = example_gradient()
     gradient, dt = gradients.interpolate_gradient(gradient, dt, n_t)
-    traj_file = os.path.join(
-        os.path.dirname(simulations.__file__), "tests", "example_traj.txt"
-    )
+    traj_file = str(tmp_path / "example_traj.txt")
     radius = 5e-6
     semiaxes = np.ones(3) * radius
     substrate = substrates.ellipsoid(semiaxes)

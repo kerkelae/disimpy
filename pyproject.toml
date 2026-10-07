@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=80"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "disimpy"
+dynamic = ["version"]
+description = "Massively parallel diffusion MR simulator"
+readme = {file = "README.rst", content-type = "text/x-rst"}
+requires-python = ">=3.11,<3.15"
+license = "MIT"
+license-files = ["license.txt"]
+authors = [{name = "Leevi Kerkelä", email = "leevi.kerkela@protonmail.com"}]
+dependencies = [
+    "matplotlib>=3.9",
+    "numba>=0.68",
+    "numba-cuda>=0.30.4",
+    "numpy>=2",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=7.4.4", "scipy>=1.13"]
+docs = ["sphinx>=7.0.1", "furo>=2023.05.20", "nbsphinx>=0.9.2", "ipython>=8.12.0"]
+
+[project.urls]
+Homepage = "https://github.com/kerkelae/disimpy"
+
+[tool.setuptools.dynamic]
+version = {attr = "disimpy._version.__version__"}
+
+[tool.setuptools.packages.find]
+include = ["disimpy*"]
+
+[tool.setuptools.package-data]
+"disimpy.tests" = ["*.txt", "*.npy", "*.pkl", "*.stl", "*.scheme"]

@@ -8,9 +8,8 @@ warnings.simplefilter("ignore", category=NumbaDeprecationWarning)
 warnings.simplefilter("ignore", category=NumbaPerformanceWarning)
 
 
+from ._version import __version__
 from . import gradients
 from . import simulations
 from . import substrates
 from . import utils
-
-__version__ = "0.4.0-dev"

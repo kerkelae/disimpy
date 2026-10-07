@@ -12,6 +12,7 @@ Status: in progress. Working branch: `dev`. Updated: 7 October 2026.
 ## Current evidence
 
 - The `disimpy` Conda environment runs Python 3.11. The fast CPU and simulator suite passes: 26 tests, with 23 full-suite tests deselected by `-m 'not gpu'`.
+- The wheel and source distribution build and install locally. The documentation builds with warnings treated as errors. CI is defined but has not run on GitHub.
 - The full numerical suite and execution on a physical GPU have not been tested.
 
 ## Work items
@@ -26,9 +27,9 @@ Status: in progress. Working branch: `dev`. Updated: 7 October 2026.
 
 ### 2. Packaging and CI
 
-- [ ] Add `pyproject.toml` with separate runtime, test, and documentation dependencies; build and install wheel and source distribution.
-- [ ] Use one version source for package and documentation; replace the exported Conda environment with a portable specification.
-- [ ] Add CI for Python 3.11–3.14 CPU and simulator tests, installation, formatting, linting, and documentation. Keep `disimpy.tests.test_all()` available through the test extra.
+- [x] Add `pyproject.toml` with separate runtime, test, and documentation dependencies; build and install wheel and source distribution.
+- [x] Use one version source for package and documentation; replace the exported Conda environment with a portable specification.
+- [ ] Verify CI on Python 3.11–3.14 for CPU and simulator tests, installation, formatting, linting, and documentation. Apply style checks to new and refactored modules. Keep `disimpy.tests.test_all()` available through the test extra.
 
 **Gate:** clean CI runs pass on all four Python versions.
 

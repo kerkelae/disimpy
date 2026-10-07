@@ -12,7 +12,7 @@
 
 import os
 import sys
-from importlib.metadata import version
+from importlib.metadata import version as package_version
 
 sys.path.insert(0, os.path.abspath(".."))
 
@@ -24,7 +24,7 @@ copyright = " Leevi Kerkelä"
 author = "Leevi Kerkelä"
 
 # The full version, including alpha/beta/rc tags
-release = version("disimpy")
+release = package_version("disimpy")
 
 
 # -- General configuration ---------------------------------------------------
@@ -37,6 +37,7 @@ extensions = [
     "sphinx.ext.napoleon",
     "nbsphinx",
 ]
+nbsphinx_execute = "never"
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]

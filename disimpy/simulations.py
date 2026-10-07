@@ -275,7 +275,7 @@ def _cuda_ray_triangle_intersection_check(triangle, r0, step):
         return np.nan
 
 
-@numba.jit(nopython=True)
+@cuda.jit(device=True)
 def _cuda_reflection(r0, step, d, normal, epsilon):
     """Calculate reflection and update r0 and step. Epsilon is the amount by
     which the new position differs from the reflection point.
@@ -311,7 +311,7 @@ def _cuda_reflection(r0, step, d, normal, epsilon):
     return
 
 
-@numba.jit(nopython=True)
+@cuda.jit(device=True)
 def _cuda_crossing(r0, step, d, normal, epsilon):
     """Make the random walker pass through the triangle and update r0. Epsilon
     is the amount by which the new position differs from the surface.

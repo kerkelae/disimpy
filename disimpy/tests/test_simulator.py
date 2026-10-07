@@ -41,3 +41,46 @@ def test_free_diffusion():
     assert np.any(signals[1] < 1)
     np.testing.assert_array_equal(signals, repeated_signals)
     np.testing.assert_array_equal(positions, repeated_positions)
+
+
+@pytest.mark.parametrize(
+    ("substrate", "radii"),
+    [
+        (substrates.sphere(5e-6), np.array([5e-6, 5e-6, 5e-6])),
+        (
+            substrates.cylinder(5e-6, np.array([1.0, 0.0, 0.0])),
+            np.array([np.inf, 5e-6, 5e-6]),
+        ),
+        (
+            substrates.ellipsoid(np.array([4e-6, 5e-6, 6e-6])),
+            np.array([4e-6, 5e-6, 6e-6]),
+        ),
+    ],
+    ids=["sphere", "cylinder", "ellipsoid"],
+)
+def test_restricted_diffusion(substrate, radii, tmp_path):
+    trajectory_path = tmp_path / "trajectory.txt"
+    options = dict(
+        n_walkers=4,
+        diffusivity=2e-9,
+        gradient=np.zeros((1, 4, 3), dtype=np.float64),
+        dt=1e-3,
+        substrate=substrate,
+        seed=123,
+        traj=str(trajectory_path),
+        final_pos=True,
+        quiet=True,
+        cuda_bs=4,
+    )
+
+    signals, positions = simulations.simulation(**options)
+    repeated_signals, repeated_positions = simulations.simulation(**options)
+    trajectory = np.loadtxt(trajectory_path).reshape(5, 4, 3)
+
+    assert signals.shape == (1,)
+    assert positions.shape == (4, 3)
+    np.testing.assert_array_equal(signals, np.array([4.0]))
+    np.testing.assert_array_equal(positions, trajectory[-1])
+    np.testing.assert_array_equal(signals, repeated_signals)
+    np.testing.assert_array_equal(positions, repeated_positions)
+    assert np.all(np.linalg.norm(trajectory / radii, axis=2) <= 1)

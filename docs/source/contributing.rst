@@ -90,10 +90,8 @@ confirm that it works as expected by executing the following in
     make html
 
 This will generate a local copy of the documentation in ``docs/_build/html``.
-Once the changes are merged with the master branch, the online documentation is
-automatically updated. Requirements for generating the documentation locally
-are listed in ``docs/requirements.txt``, and they can be installed with pip:
+Install the documentation dependencies from the repository root with pip:
 
 .. code-block::
 
-    pip install -r docs/requirements.txt
+    pip install ".[docs]"

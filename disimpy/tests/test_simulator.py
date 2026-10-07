@@ -39,6 +39,12 @@ def test_free_diffusion():
     assert np.all(np.isfinite(signals))
     assert np.all(np.abs(signals) <= 1)
     assert np.any(signals[1] < 1)
+    np.testing.assert_allclose(
+        signals[1],
+        [0.97768145, 0.84839491, 0.29838975, 0.98809149],
+        rtol=0,
+        atol=1e-7,
+    )
     np.testing.assert_array_equal(signals, repeated_signals)
     np.testing.assert_array_equal(positions, repeated_positions)
 

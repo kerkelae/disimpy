@@ -11,16 +11,16 @@ Status: in progress. Working branch: `dev`. Updated: 7 October 2026.
 
 ## Current evidence
 
-- A new `disimpy` Conda environment runs Python 3.11. Three existing kernel tests and a two-walker public simulation passed with `NUMBA_ENABLE_CUDASIM=1`.
+- The `disimpy` Conda environment runs Python 3.11. The fast CPU and simulator suite passes: 26 tests, with 23 full-suite tests deselected by `-m 'not gpu'`.
 - The full numerical suite and execution on a physical GPU have not been tested.
 
 ## Work items
 
 ### 1. Baseline and CPU simulation
 
-- [ ] Record reference outputs and tolerances for free, sphere, cylinder, ellipsoid, and mesh substrates.
-- [ ] Add small CUDA simulator tests for shapes, zero and nonzero gradients, confinement, and seeded repeatability. Set `NUMBA_ENABLE_CUDASIM=1` before import; keep walker and step counts small.
-- [ ] Separate long statistical GPU tests from fast tests and write temporary trajectories outside the repository.
+- [x] Record reference outputs and tolerances for free, sphere, cylinder, ellipsoid, and mesh substrates.
+- [x] Add small CUDA simulator tests for shapes, zero and nonzero gradients, confinement, and seeded repeatability. Set `NUMBA_ENABLE_CUDASIM=1` before import; keep walker and step counts small.
+- [x] Separate long statistical GPU tests from fast tests and write temporary trajectories outside the repository.
 
 **Gate:** CPU and small simulator tests pass locally on Python 3.11.
 

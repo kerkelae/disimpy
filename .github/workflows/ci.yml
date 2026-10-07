@@ -52,3 +52,14 @@ jobs:
           /tmp/disimpy-sdist/bin/python -m pip install dist/*.tar.gz
           cd /tmp
           /tmp/disimpy-sdist/bin/python -c "import disimpy, importlib.metadata; assert disimpy.__version__ == importlib.metadata.version('disimpy')"
+
+  style:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+      - run: python -m pip install ruff
+      - run: ruff format --check disimpy/_version.py disimpy/tests/test_simulator.py disimpy/tests/test_simulator_mesh.py
+      - run: ruff check --select E4,E7,E9,F disimpy/_version.py disimpy/tests/test_simulator.py disimpy/tests/test_simulator_mesh.py

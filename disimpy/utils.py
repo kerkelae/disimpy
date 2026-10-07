@@ -1,11 +1,6 @@
 """This module contains general useful functions."""
 
-import warnings
-
 import numpy as np
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
-from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
 
 def vec2vec_rotmat(v, k):
@@ -56,6 +51,8 @@ def show_traj(traj_file):
     -------
     None
     """
+    import matplotlib.pyplot as plt
+
     trajectories = np.loadtxt(traj_file)
     trajectories = trajectories.reshape(
         (trajectories.shape[0], int(trajectories.shape[1] / 3), 3)
@@ -92,6 +89,9 @@ def show_mesh(substrate, seed=123):
     -------
     None
     """
+    import matplotlib.pyplot as plt
+    from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+
     np.random.seed(seed)
     fig = plt.figure()
     ax = fig.add_subplot(111, projection="3d")

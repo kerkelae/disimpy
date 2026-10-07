@@ -37,7 +37,8 @@ Status: in progress. Working branch: `dev`. Updated: 7 October 2026.
 
 - [ ] Move CPU initialization and mesh preparation into private modules without changing results.
 - [ ] Separate CUDA device functions and kernels from host execution, transfers, and output.
-- [ ] Isolate plotting imports and warning handling; retain public imports and `simulations.simulation()` arguments.
+- [x] Load plotting dependencies only when plotting; retain public utility functions.
+- [ ] Scope warning handling to the operations that need it; retain public imports and `simulations.simulation()` arguments.
 
 **Gate:** each change passes the fast tests and matches the recorded baseline.
 

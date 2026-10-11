@@ -1,0 +1,90 @@
+name: Publish release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
+    env:
+      NUMBA_ENABLE_CUDASIM: "1"
+      MPLBACKEND: Agg
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m pip install ".[test]"
+      - run: python -m pytest -m "not gpu"
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+      - name: Check tag matches package version
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          python - <<'PY'
+          import ast
+          import os
+          from pathlib import Path
+
+          version_file = Path("disimpy/_version.py")
+          version = ast.literal_eval(version_file.read_text().split("=", 1)[1].strip())
+          tag = os.environ["RELEASE_TAG"]
+          if tag != "v" + version or ".dev" in version:
+              raise SystemExit(f"Release tag {tag!r} does not match a release version {version!r}")
+          print(f"Building {tag}")
+          PY
+      - run: python -m pip install build twine
+      - run: python -m build
+      - run: python -m twine check dist/*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: distributions
+          path: dist/*
+          if-no-files-found: error
+
+  publish-pypi:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/disimpy
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: distributions
+          path: dist
+      - uses: pypa/gh-action-pypi-publish@release/v1
+
+  github-assets:
+    needs: [build, publish-pypi]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: distributions
+          path: dist
+      - name: Attach distributions to GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: gh release upload "$RELEASE_TAG" dist/* --repo "$GITHUB_REPOSITORY"

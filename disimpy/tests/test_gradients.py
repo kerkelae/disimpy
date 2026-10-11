@@ -4,6 +4,7 @@ import os
 
 import numpy as np
 import numpy.testing as npt
+import pytest
 
 from .. import gradients, utils
 
@@ -31,6 +32,35 @@ def test_interpolate_gradient():
     return
 
 
+@pytest.mark.parametrize(
+    "gradient",
+    [
+        np.zeros((0, 2, 3)),
+        np.zeros((1, 1, 3)),
+        np.zeros((1, 2, 2)),
+        np.full((1, 2, 3), np.nan),
+        np.zeros((1, 2, 3), dtype=int),
+    ],
+)
+def test_gradient_helpers_reject_invalid_arrays(gradient):
+    with pytest.raises(ValueError, match="gradient"):
+        gradients.calc_q(gradient, 1e-3)
+
+
+@pytest.mark.parametrize("dt", [0.0, -1e-3, np.nan, np.inf, 1])
+def test_gradient_helpers_reject_invalid_dt(dt):
+    gradient, _ = example_gradient()
+    with pytest.raises(ValueError, match="dt"):
+        gradients.calc_q(gradient, dt)
+
+
+@pytest.mark.parametrize("n_t", [0, 1, 2.5])
+def test_interpolate_rejects_invalid_sample_count(n_t):
+    gradient, dt = example_gradient()
+    with pytest.raises(ValueError, match="n_t"):
+        gradients.interpolate_gradient(gradient, dt, n_t)
+
+
 def test_calc_q():
     gradient, dt = example_gradient()
     q = gradients.calc_q(gradient, dt)
@@ -38,7 +68,7 @@ def test_calc_q():
     for i in np.linspace(0, gradient.shape[1] - 1, 10).astype(int):
         npt.assert_almost_equal(
             q[:, i - 1, :],
-            gradients.GAMMA * np.trapz(gradient[:, 0:i, :], dx=dt, axis=1),
+            gradients.GAMMA * np.trapezoid(gradient[:, 0:i, :], dx=dt, axis=1),
         )
     return
 
@@ -48,6 +78,27 @@ def test_calc_b():
     b = gradients.calc_b(gradient, dt)
     npt.assert_almost_equal(b / 1.07507347e10, 1)
     return
+
+
+def test_calc_b_uses_n_samples_over_n_minus_one_intervals():
+    dt = 1e-3
+    magnitude = 0.1
+    gradient = np.zeros((1, 4, 3))
+    gradient[0, :, 0] = [0, magnitude, -magnitude, 0]
+    scale = gradients.GAMMA**2 * magnitude**2 * dt**3
+
+    q = gradients.calc_q(gradient, dt)
+    npt.assert_allclose(q[:, -1], 0, atol=1e-12)
+    npt.assert_allclose(gradients.calc_b(gradient, dt), [11 / 20 * scale])
+
+
+def test_nonrephased_b_excludes_terminal_position_encoding():
+    dt = 2e-3
+    magnitude = 0.2
+    gradient = np.zeros((1, 2, 3))
+    gradient[0, :, 0] = magnitude
+    scale = gradients.GAMMA**2 * magnitude**2 * dt**3
+    npt.assert_allclose(gradients.calc_b(gradient, dt), [scale / 3])
 
 
 def test_set_b():
@@ -63,6 +114,25 @@ def test_set_b():
     return
 
 
+def test_set_b_zero_and_invalid_targets():
+    gradient, dt = example_gradient()
+    two_measurements = np.repeat(gradient, 2, axis=0)
+    scaled = gradients.set_b(two_measurements, dt, [0, 1e9])
+    npt.assert_array_equal(scaled[0], 0)
+    npt.assert_allclose(gradients.calc_b(scaled, dt), [0, 1e9], rtol=1e-12)
+    npt.assert_allclose(gradients.calc_b(gradients.set_b(gradient, dt, 2e9), dt), [2e9])
+    npt.assert_array_equal(gradients.set_b(np.zeros_like(gradient), dt, 0), 0)
+
+    for invalid in (-1, np.nan, np.inf, [1e9, np.nan]):
+        with pytest.raises(ValueError, match="finite and nonnegative"):
+            gradients.set_b(two_measurements, dt, invalid)
+    for invalid in ([1e9], [1e9, 2e9, 3e9], [[1e9], [2e9]]):
+        with pytest.raises(ValueError):
+            gradients.set_b(two_measurements, dt, invalid)
+    with pytest.raises(ValueError, match="zero waveform"):
+        gradients.set_b(np.zeros_like(gradient), dt, 1e9)
+
+
 def test_rotate_gradient():
     gradient, _ = example_gradient()
     k = np.array([0.1, 0.5, -0.9])
@@ -74,6 +144,24 @@ def test_rotate_gradient():
     Rs = np.ones((1, 3, 3))
     npt.assert_raises(ValueError, gradients.rotate_gradient, gradient=gradient, Rs=Rs)
     return
+
+
+def test_rotate_gradient_requires_one_matrix_per_measurement():
+    gradient, _ = example_gradient()
+    two_measurements = np.repeat(gradient, 2, axis=0)
+    for Rs in (
+        np.eye(3)[None, :, :],
+        np.repeat(np.eye(3)[None, :, :], 3, axis=0),
+        np.eye(3),
+    ):
+        with pytest.raises(ValueError, match="number of measurements"):
+            gradients.rotate_gradient(two_measurements, Rs)
+    npt.assert_array_equal(
+        gradients.rotate_gradient(
+            two_measurements, np.repeat(np.eye(3)[None, :, :], 2, axis=0)
+        ),
+        two_measurements,
+    )
 
 
 def test_pgse():
@@ -109,6 +197,37 @@ def test_pgse():
         gradient[:, 1] / np.linalg.norm(gradient[:, 1], axis=1), bvecs
     )
     return
+
+
+def test_pgse_scalar_bvalue_and_antiparallel_direction():
+    bvalue = 1e9
+    gradient, dt = gradients.pgse(15e-3, 50e-3, 256, bvalue, np.array([-1.0, 0.0, 0.0]))
+    npt.assert_equal(gradient.shape, (1, 256, 3))
+    npt.assert_allclose(gradients.calc_b(gradient, dt), [bvalue], rtol=1e-12)
+    npt.assert_allclose(gradient[0, 1, 0], -np.linalg.norm(gradient[0, 1]), atol=1e-14)
+
+
+def test_pgse_b0_zero_direction_and_mixed_measurements():
+    bvals = [0, 1e9]
+    bvecs = [[0, 0, 0], [0, 1, 0]]
+    gradient, dt = gradients.pgse(15e-3, 50e-3, 256, bvals, bvecs)
+    npt.assert_array_equal(gradient[0], 0)
+    npt.assert_allclose(gradients.calc_b(gradient, dt), bvals, rtol=1e-12, atol=1e-12)
+    npt.assert_allclose(
+        gradient[1, 1] / np.linalg.norm(gradient[1, 1]), bvecs[1], atol=1e-14
+    )
+
+
+def test_pgse_invalid_inputs_and_underresolved_pulses():
+    for bvals in (-1, np.nan, np.inf):
+        with pytest.raises(ValueError, match="finite and nonnegative"):
+            gradients.pgse(15e-3, 50e-3, 256, bvals, [1, 0, 0])
+    with pytest.raises(ValueError, match="nonzero b-vectors"):
+        gradients.pgse(15e-3, 50e-3, 256, 1e9, [0, 0, 0])
+    with pytest.raises(ValueError, match="one three-dimensional b-vector"):
+        gradients.pgse(15e-3, 50e-3, 256, [0, 1e9], [[0, 0, 0]])
+    with pytest.raises(ValueError, match="under-resolved"):
+        gradients.pgse(15e-3, 50e-3, 8, 1e9, [1, 0, 0])
 
 
 def test_load_camino_scheme_file():

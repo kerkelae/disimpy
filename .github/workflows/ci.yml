@@ -1,0 +1,72 @@
+name: CI
+
+on: [push, pull_request]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
+    env:
+      NUMBA_ENABLE_CUDASIM: "1"
+      MPLBACKEND: Agg
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m pip install ".[test]"
+      - run: python -m pytest -m "not gpu"
+
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+      - run: sudo apt-get update && sudo apt-get install -y pandoc
+      - run: python -m pip install ".[docs]"
+      - run: sphinx-build -b html -W --keep-going -q docs/source docs/_build
+
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+      - run: python -m pip install build
+      - run: python -m build
+      - run: |
+          python -m venv /tmp/disimpy-wheel
+          /tmp/disimpy-wheel/bin/python -m pip install dist/*.whl
+          cd /tmp
+          /tmp/disimpy-wheel/bin/python -c "import disimpy, importlib.metadata; assert disimpy.__version__ == importlib.metadata.version('disimpy')"
+      - run: |
+          python -m venv /tmp/disimpy-sdist
+          /tmp/disimpy-sdist/bin/python -m pip install dist/*.tar.gz
+          cd /tmp
+          /tmp/disimpy-sdist/bin/python -c "import disimpy, importlib.metadata; assert disimpy.__version__ == importlib.metadata.version('disimpy')"
+
+  style:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+      - run: python -m pip install ruff
+      - run: >-
+          ruff format --check
+          disimpy/*.py disimpy/tests/test_*.py
+          docs/source/conf.py
+      - run: >-
+          ruff check --select E4,E7,E9,F
+          disimpy/*.py disimpy/tests/test_*.py
+          docs/source/conf.py

@@ -51,49 +51,65 @@ a-fork>`_.
    environment
    <https://conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html#creating-an-environment-from-an-environment-yml-file>`_
    in the file ``development_environment.yml`` and to install the package in
-   editable mode by executing the following in the root directory of the
-   repository:
+   editable mode with test, documentation, and CUDA Toolkit dependencies from
+   the repository root:
 
    .. code-block::
 
-        pip install -e .
+        pip install -e ".[test,docs,cuda13]"
+
+   Use ``cuda12`` for CUDA 12. The fast simulator tests need only
+   ``.[test,docs]``.
 
 Code style
 ##########
 
-All code should be formatted with `Black <https://github.com/psf/black>`_ using
-the default settings and documented following the `Numpy docstring conventions
-<https://numpydoc.readthedocs.io/en/latest/format.html>`_ (except trivial
-internal functions).
+Format new and refactored Python modules with Ruff. Use the `NumPy docstring
+conventions <https://numpydoc.readthedocs.io/en/latest/format.html>`_ for
+public functions.
 
 Tests
 #####
 
-It is important to make sure that your changes have not broken
-anything by running all tests:
+Run the fast CPU and CUDA simulator tests without a GPU from the repository
+root:
 
-.. code-block:: python
+.. code-block::
 
-   from disimpy.tests import test_all
-   test_all()
+   NUMBA_ENABLE_CUDASIM=1 python -m pytest -q -m 'not gpu'
+
+The full numerical suite needs a physical GPU:
+
+.. code-block::
+
+   python -m pytest -q
 
 Documentation
 #############
 
-If you make changes to the documentation, you should build it locally to
-confirm that it works as expected by executing the following in
-``docs``:
+After installing the documentation extra, build the documentation from the
+repository root. Install Pandoc first (for example, ``conda install
+-c conda-forge pandoc``) so nbsphinx can convert the tutorial notebooks:
 
 .. code-block::
 
-    make clean
-    make html
+    sphinx-build -b html -W --keep-going docs/source docs/_build/html
 
-This will generate a local copy of the documentation in ``docs/_build/html``.
-Once the changes are merged with the master branch, the online documentation is
-automatically updated. Requirements for generating the documentation locally
-are listed in ``docs/requirements.txt``, and they can be installed with pip:
+The generated HTML is in ``docs/_build/html``.
 
-.. code-block::
+Releasing
+#########
 
-    pip install -r docs/requirements.txt
+Before publishing, run the full numerical suite on a physical GPU, review
+the Python matrix in GitHub Actions, and inspect the installed wheel and
+source distribution. The version in ``disimpy/_version.py`` must match the
+reviewed Git tag with a ``v`` prefix, for example ``v0.4.0rc1``.
+
+The ``release.yml`` workflow runs the fast suite on Python 3.11–3.14, builds
+the distributions, and checks their metadata. Publishing a GitHub release
+from that tag then publishes the same distributions to PyPI through a
+`trusted publisher <https://docs.pypi.org/trusted-publishers/using-a-publisher/>`_
+and attaches them to the GitHub release. Configure the PyPI trusted publisher
+for the ``kerkelae/disimpy`` repository, ``release.yml`` workflow, and
+``pypi`` environment before publishing the first release. Review the tag and
+artifacts before publishing the GitHub release.

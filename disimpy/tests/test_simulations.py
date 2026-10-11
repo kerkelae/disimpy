@@ -1,428 +1,16 @@
-"""This module contains tests of the simulations module."""
+"""End-to-end simulation tests."""
 
 import os
-import math
-import numba
 import pickle
 
 import numpy as np
-from numba import cuda
 import numpy.testing as npt
-from scipy.stats import normaltest, kstest
-from numba.cuda.random import (
-    create_xoroshiro128p_states,
-    xoroshiro128p_normal_float64,
-)
+import pytest
 
-from .. import gradients, simulations, substrates, utils
-
+from .. import gradients, simulations, substrates
 
 SEED = 123
-
-
-def test__cuda_dot_product():
-    @cuda.jit()
-    def test_kernel(a, b, dp):
-        thread_id = cuda.grid(1)
-        if thread_id >= a.shape[0]:
-            return
-        dp[thread_id] = simulations._cuda_dot_product(a[thread_id, :], b[thread_id, :])
-        return
-
-    np.random.seed(SEED)
-    for _ in range(100):
-        a = (np.random.random(3) - 0.5)[np.newaxis, :]
-        b = (np.random.random(3) - 0.5)[np.newaxis, :]
-        dp = np.zeros(1)
-        stream = cuda.stream()
-        test_kernel[1, 128, stream](a, b, dp)
-        stream.synchronize()
-        npt.assert_almost_equal(dp[0], np.dot(a[0], b[0]))
-    return
-
-
-def test__cuda_cross_product():
-    @cuda.jit()
-    def test_kernel(a, b, cp):
-        thread_id = cuda.grid(1)
-        if thread_id >= a.shape[0]:
-            return
-        simulations._cuda_cross_product(
-            a[thread_id, :], b[thread_id, :], cp[thread_id, :]
-        )
-        return
-
-    np.random.seed(SEED)
-    for _ in range(100):
-        a = (np.random.random(3) - 0.5)[np.newaxis, :]
-        b = (np.random.random(3) - 0.5)[np.newaxis, :]
-        cp = np.zeros(3)[np.newaxis, :]
-        stream = cuda.stream()
-        test_kernel[1, 128, stream](a, b, cp)
-        stream.synchronize()
-        npt.assert_almost_equal(cp[0], np.cross(a[0], b[0]))
-    return
-
-
-def test__cuda_normalize_vector():
-    @cuda.jit()
-    def test_kernel(a):
-        thread_id = cuda.grid(1)
-        if thread_id >= a.shape[0]:
-            return
-        simulations._cuda_normalize_vector(a[thread_id, :])
-        return
-
-    np.random.seed(SEED)
-    for _ in range(100):
-        a = (np.random.random(3) - 0.5)[np.newaxis, :]
-        desired_a = a / np.linalg.norm(a)
-        stream = cuda.stream()
-        test_kernel[1, 128, stream](a)
-        stream.synchronize()
-        npt.assert_almost_equal(a, desired_a)
-    return
-
-
-def test__cuda_triangle_normal():
-    @cuda.jit()
-    def test_kernel(triangle, normal):
-        thread_id = cuda.grid(1)
-        if thread_id >= triangle.shape[0]:
-            return
-        simulations._cuda_triangle_normal(triangle[thread_id, :], normal[thread_id, :])
-        return
-
-    np.random.seed(SEED)
-    for _ in range(100):
-        triangle = (np.random.random((3, 3)) - 0.5)[np.newaxis, :]
-        desired = np.cross(
-            triangle[0, 0] - triangle[0, 1], triangle[0, 0] - triangle[0, 2]
-        )
-        desired /= np.linalg.norm(desired)
-        desired = desired[np.newaxis, :]
-        normal = np.zeros(3)[np.newaxis, :]
-        stream = cuda.stream()
-        test_kernel[1, 128, stream](triangle, normal)
-        stream.synchronize()
-        npt.assert_almost_equal(normal, desired)
-    return
-
-
-def test__cuda_random_step():
-    @cuda.jit()
-    def test_kernel(steps, rng_states):
-        thread_id = cuda.grid(1)
-        if thread_id >= steps.shape[0]:
-            return
-        simulations._cuda_random_step(steps[thread_id, :], rng_states, thread_id)
-        return
-
-    N = int(1e5)
-    seeds = [1, 1, 12]
-    steps = np.zeros((len(seeds), N, 3))
-    block_size = 128
-    grid_size = int(math.ceil(N / block_size))
-    for i, seed in enumerate(seeds):
-        stream = cuda.stream()
-        rng_states = create_xoroshiro128p_states(
-            grid_size * block_size, seed=seed, stream=stream
-        )
-        test_kernel[grid_size, block_size, stream](steps[i, :, :], rng_states)
-        stream.synchronize()
-    npt.assert_equal(steps[0], steps[1])
-    npt.assert_equal(np.all(steps[0] != steps[2]), True)
-    npt.assert_almost_equal(np.mean(np.sum(steps[1::], axis=1) / N), 0, 3)
-    _, p = normaltest(steps[1::].ravel())
-    npt.assert_almost_equal(p, 0)
-    npt.assert_almost_equal(np.linalg.norm(steps, axis=2), np.ones((len(seeds), N)))
-    return
-
-
-def test__cuda_mat_mul():
-    @cuda.jit()
-    def test_kernel(R, a):
-        thread_id = cuda.grid(1)
-        if thread_id >= a.shape[0]:
-            return
-        simulations._cuda_mat_mul(R, a[thread_id, :])
-        return
-
-    for _ in range(100):
-        v = (np.random.random(3) - 0.5)[np.newaxis, :]
-        R = np.random.random((3, 3)) - 0.5
-        desired_v = np.matmul(R, v[0])
-        stream = cuda.stream()
-        test_kernel[1, 256, stream](R, v)
-        stream.synchronize()
-        npt.assert_almost_equal(v[0], desired_v)
-    return
-
-
-def test__cuda_line_circle_intersection():
-    @cuda.jit()
-    def test_kernel(d, r0, step, radius):
-        thread_id = cuda.grid(1)
-        if thread_id >= r0.shape[0]:
-            return
-        d[thread_id] = simulations._cuda_line_circle_intersection(
-            r0[thread_id, :], step, radius
-        )
-        return
-
-    d = np.zeros(1)
-    r0 = np.array([-0.1, -0.1])[np.newaxis, :]
-    step = np.array([1.0, 1])
-    step /= np.linalg.norm(step)
-    radius = 1.0
-    stream = cuda.stream()
-    test_kernel[1, 256, stream](d, r0, step, radius)
-    stream.synchronize()
-    npt.assert_almost_equal(d[0], 1.1414213562373097)
-    return
-
-
-def test__cuda_line_sphere_intersection():
-    @cuda.jit()
-    def test_kernel(d, r0, step, radius):
-        thread_id = cuda.grid(1)
-        if thread_id >= r0.shape[0]:
-            return
-        d[thread_id] = simulations._cuda_line_sphere_intersection(
-            r0[thread_id, :], step, radius
-        )
-        return
-
-    d = np.zeros(1)
-    r0 = np.array([-0.1, -0.1, 0])[np.newaxis, :]
-    step = np.array([1.0, 1, 0])
-    step /= np.linalg.norm(step)
-    radius = 1.0
-    stream = cuda.stream()
-    test_kernel[1, 256, stream](d, r0, step, radius)
-    stream.synchronize()
-    npt.assert_almost_equal(d[0], 1.1414213562373097)
-    return
-
-
-def test__cuda_line_ellipsoid_intersection():
-    @cuda.jit()
-    def test_kernel(d, r0, step, semiaxes):
-        thread_id = cuda.grid(1)
-        if thread_id >= r0.shape[0]:
-            return
-        d[thread_id] = simulations._cuda_line_ellipsoid_intersection(
-            r0[thread_id, :], step, semiaxes
-        )
-        return
-
-    d = np.zeros(1)
-    r0 = np.array([-0.1, -0.1, 0])[np.newaxis, :]
-    step = np.array([1.0, 1, 0])
-    step /= np.linalg.norm(step)
-    semiaxes = np.array([1.0, 1.0, 1.0])
-    stream = cuda.stream()
-    test_kernel[1, 256, stream](d, r0, step, semiaxes)
-    stream.synchronize()
-    npt.assert_almost_equal(d[0], 1.1414213562373097)
-    return
-
-
-def test__cuda_ray_triangle_intersection_check():
-    @cuda.jit()
-    def test_kernel(ds, triangle, r0s, steps):
-        thread_id = cuda.grid(1)
-        if thread_id >= ds.shape[0]:
-            return
-        ds[thread_id, :] = simulations._cuda_ray_triangle_intersection_check(
-            triangle, r0s[thread_id, :], steps[thread_id, :]
-        )
-        return
-
-    triangle = np.array([[2.0, 0, 0], [0, 2.0, 0], [0.0, 0, 0]])
-    r0s = np.array(
-        [
-            [0.1, 0.1, 1.0],
-            [0.1, 0.1, 1.0],
-            [0.1, 0.1, 1.0],
-            [0.1, 0.1, 1.0],
-            [10, 10, 0],
-        ]
-    )
-    steps = np.array(
-        [[0, 0, -1.0], [0, 0, 1], [0, 0, -0.1], [1.0, 1.0, 0], [0, 0, 1.0]]
-    )
-    ds = np.zeros((5, 1))
-    stream = cuda.stream()
-    test_kernel[1, 256, stream](ds, triangle, r0s, steps)
-    stream.synchronize()
-    npt.assert_almost_equal(ds, np.array([[1, -1, 10, np.nan, np.nan]]).T)
-    return
-
-
-def test__cuda_reflection():
-    @cuda.jit()
-    def test_kernel(r0, step, d, normal, epsilon):
-        thread_id = cuda.grid(1)
-        if thread_id >= r0.shape[0]:
-            return
-        simulations._cuda_reflection(
-            r0[thread_id, :],
-            step[thread_id, :],
-            d,
-            normal[thread_id, :],
-            epsilon,
-        )
-        return
-
-    r0 = np.array([0.0, 0.0, 0.0])[np.newaxis, :]
-    step = np.array([0.0, 0.0, 1.0])[np.newaxis, :]
-    d = 0.5
-    normal = np.array([0.0, 1.0, 1.0])[np.newaxis, :]
-    normal /= np.linalg.norm(normal)
-    stream = cuda.stream()
-    test_kernel[1, 128, stream](r0, step, d, normal, 0.0)
-    stream.synchronize()
-    npt.assert_almost_equal(step, np.array([[0.0, -1.0, 0.0]]))
-    npt.assert_almost_equal(r0, np.array([[0.0, 0.0, 0.5]]))
-
-    r0 = np.array([0.0, 0.0, 0.0])[np.newaxis, :]
-    step = np.array([0.0, 0.0, 1.0])[np.newaxis, :]
-    stream = cuda.stream()
-    test_kernel[1, 128, stream](r0, step, d, normal, 0.5)
-    stream.synchronize()
-    npt.assert_almost_equal(step, np.array([[0.0, -1.0, 0.0]]))
-    npt.assert_almost_equal(r0, np.array([[0.0, 0.0, 0.5]] + normal * 0.5))
-
-    @cuda.jit()
-    def test_kernel(triangle, r0, step, step_l, epsilon):
-        thread_id = cuda.grid(1)
-        if thread_id >= r0.shape[0]:
-            return
-        r0 = r0[thread_id]
-        step = step[thread_id]
-        triangle = triangle[thread_id]
-        d = simulations._cuda_ray_triangle_intersection_check(triangle, r0, step)
-        if d > 0 and d < step_l:
-            normal = cuda.local.array(3, numba.float64)
-            simulations._cuda_triangle_normal(triangle, normal)
-            simulations._cuda_reflection(r0, step, d, normal, epsilon)
-        return
-
-    triangle = np.zeros((3, 3))
-    triangle[1, 0] = 1
-    triangle[2, 1] = 1
-    triangle = triangle[np.newaxis, ...]
-    r0 = np.array([0, 0, 0.5])[np.newaxis, ...]
-    step = np.array([0, 0, -1.0])[np.newaxis, ...]
-    d = 0.5
-    step_l = 1.0
-    epsilon = 1e-10
-    stream = cuda.stream()
-    test_kernel[1, 128, stream](triangle, r0, step, step_l, epsilon)
-    stream.synchronize()
-    npt.assert_almost_equal(step, np.array([[0.0, 0.0, 1.0]]))
-    npt.assert_almost_equal(r0, np.array([[0.0, 0.0, epsilon]]))
-    return
-
-
-def test__cuda_crossing():
-
-    @cuda.jit()
-    def test_kernel(triangle, r0, step, step_l, epsilon):
-        thread_id = cuda.grid(1)
-        if thread_id >= r0.shape[0]:
-            return
-        r0 = r0[thread_id]
-        step = step[thread_id]
-        triangle = triangle[thread_id]
-        d = simulations._cuda_ray_triangle_intersection_check(triangle, r0, step)
-        if d > 0 and d < step_l:
-            normal = cuda.local.array(3, numba.float64)
-            simulations._cuda_triangle_normal(triangle, normal)
-            simulations._cuda_crossing(r0, step, d, normal, epsilon)
-        return
-
-    triangle = np.zeros((1, 3, 3))
-    triangle[:, 0, 2] = 1
-    triangle[:, 1, 0] = 1
-    triangle[:, 1, 2] = 1
-    triangle[:, 2, 1] = 1
-    triangle[:, 2, 2] = 1
-    r0 = np.array([0, 0, 0])[np.newaxis, ...]
-    step = np.array([0, 0, 1])[np.newaxis, ...]
-    step_l = 2
-    epsilon = 1e-10
-    stream = cuda.stream()
-    test_kernel[1, 128, stream](triangle, r0, step, step_l, epsilon)
-    stream.synchronize()
-    npt.assert_almost_equal(r0, np.array([[0.0, 0, 1 + epsilon]]))
-    return
-
-
-def test__fill_circle():
-    radius = 5e-6
-    N = int(1e5)
-    points = simulations._fill_circle(N, radius)
-    npt.assert_equal(np.max(np.linalg.norm(points, axis=1)) < radius, True)
-    npt.assert_almost_equal(np.mean(points, axis=0), 0)
-    _, p = kstest((points.ravel() + radius) / radius, "uniform")
-    npt.assert_almost_equal(p, 0)
-    return
-
-
-def test__fill_sphere():
-    radius = 5e-6
-    N = int(1e5)
-    points = simulations._fill_sphere(N, radius)
-    npt.assert_equal(np.max(np.linalg.norm(points, axis=1)) < radius, True)
-    npt.assert_almost_equal(np.mean(points, axis=0), 0)
-    _, p = kstest((points.ravel() + radius) / radius, "uniform")
-    npt.assert_almost_equal(p, 0)
-    return
-
-
-def test__fill_ellipsoid():
-    N = int(1e5)
-    a = 10e-6
-    b = 2e-6
-    c = 5e-6
-    semiaxes = np.array([a, b, c])
-    points = simulations._fill_ellipsoid(N, semiaxes)
-    npt.assert_equal(np.all(np.max(points, axis=0) < [a, b, c]), True)
-    npt.assert_equal(np.all(np.min(points, axis=0) > [-a, -b, -c]), True)
-    npt.assert_almost_equal(np.mean(points, axis=0), 0)
-    for i, r in enumerate([a, b, c]):
-        _, p = kstest((points[:, i].ravel() + r) / r, "uniform")
-        npt.assert_almost_equal(p, 0)
-    return
-
-
-def test__initial_positions_cylinder():
-    N = int(1e3)
-    r = 5e-6
-    v = np.array([1.0, 0, 0])
-    k = np.array([0, 1.0, 0])
-    R = utils.vec2vec_rotmat(v, k)
-    pos = simulations._initial_positions_cylinder(N, r, R)
-    R_inv = np.linalg.inv(R)
-    npt.assert_almost_equal(pos[:, 1], np.zeros(N))
-    npt.assert_almost_equal(np.matmul(R_inv, pos.T)[0], np.zeros(N))
-    return
-
-
-def test__initial_positions_ellipsoid():
-    N = int(1e3)
-    r = 5e-6
-    v = np.array([1.0, 0, 0])
-    k = np.array([0, 1.0, 0])
-    R = utils.vec2vec_rotmat(v, k)
-    semiaxes = np.array([r, r, 1e-22])
-    pos = simulations._initial_positions_ellipsoid(N, semiaxes, R)
-    R_inv = np.linalg.inv(R)
-    npt.assert_almost_equal(pos[:, 2], np.zeros(N))
-    npt.assert_almost_equal(np.matmul(R_inv, pos.T)[2], np.zeros(N))
-    return
+pytestmark = pytest.mark.gpu
 
 
 def test__fill_mesh():
@@ -441,7 +29,6 @@ def test__fill_mesh():
     ]:
         for periodic in [True, False]:
             for padding in [np.zeros(3), np.zeros(3) + 1e-6]:
-
                 substrate = substrates.mesh(
                     vertices, faces, periodic, padding=padding, n_sv=n_sv
                 )
@@ -466,7 +53,7 @@ def example_gradient():
     return gradient, dt
 
 
-def test_free_diffusion():
+def test_free_diffusion(tmp_path):
 
     # Signal
     n_s = int(1e5)
@@ -486,21 +73,25 @@ def test_free_diffusion():
     n_t = int(1e2)
     gradient, dt = example_gradient()
     gradient, dt = gradients.interpolate_gradient(gradient, dt, n_t)
-    traj_file = os.path.join(
-        os.path.dirname(simulations.__file__), "tests", "example_traj.txt"
-    )
+    traj_file = str(tmp_path / "example_traj.txt")
     signals = simulations.simulation(
         n_s, diffusivity, gradient, dt, substrate, traj=traj_file
     )
     trajectories = np.loadtxt(traj_file)
-    npt.assert_equal(trajectories.shape, (n_t + 1, n_s * 3))
-    trajectories = trajectories.reshape((n_t + 1, n_s, 3))
+    npt.assert_equal(trajectories.shape, (n_t, n_s * 3))
+    trajectories = trajectories.reshape((n_t, n_s, 3))
     npt.assert_equal(np.prod(trajectories[0, :, :] == 0), 1)
     npt.assert_almost_equal(np.mean(trajectories[-1], axis=0), 0, 5)
+    expected_msd = 6 * diffusivity * (n_t - 1) * dt
+    npt.assert_allclose(
+        np.mean(np.sum(trajectories[-1] ** 2, axis=1)),
+        expected_msd,
+        rtol=0.03,
+    )
     return
 
 
-def test_cylinder_diffusion():
+def test_cylinder_diffusion(tmp_path):
 
     # Walker trajectories
     n_s = int(1e2)
@@ -508,9 +99,7 @@ def test_cylinder_diffusion():
     diffusivity = 2e-9
     gradient, dt = example_gradient()
     gradient, dt = gradients.interpolate_gradient(gradient, dt, n_t)
-    traj_file = os.path.join(
-        os.path.dirname(simulations.__file__), "tests", "example_traj.txt"
-    )
+    traj_file = str(tmp_path / "example_traj.txt")
     for radius in [1e-6, 5e-6, 1e-3]:
         substrate = substrates.cylinder(
             radius=radius, orientation=np.array([1.0, 0, 0])
@@ -518,7 +107,7 @@ def test_cylinder_diffusion():
         signals = simulations.simulation(
             n_s, diffusivity, gradient, dt, substrate, traj=traj_file
         )
-        trajectories = np.loadtxt(traj_file).reshape((n_t + 1, n_s, 3))
+        trajectories = np.loadtxt(traj_file).reshape((n_t, n_s, 3))
         max_pos = np.max(np.linalg.norm(trajectories[..., 1::], axis=2))
         npt.assert_equal(max_pos < radius, True)
         npt.assert_almost_equal(max_pos, radius)
@@ -589,7 +178,7 @@ def test_cylinder_diffusion():
     return
 
 
-def test_sphere_diffusion():
+def test_sphere_diffusion(tmp_path):
 
     # Walker trajectories
     n_s = int(1e2)
@@ -597,15 +186,13 @@ def test_sphere_diffusion():
     diffusivity = 2e-9
     gradient, dt = example_gradient()
     gradient, dt = gradients.interpolate_gradient(gradient, dt, n_t)
-    traj_file = os.path.join(
-        os.path.dirname(simulations.__file__), "tests", "example_traj.txt"
-    )
+    traj_file = str(tmp_path / "example_traj.txt")
     radius = 5e-6
     substrate = substrates.sphere(radius)
     signals = simulations.simulation(
         n_s, diffusivity, gradient, dt, substrate, traj=traj_file
     )
-    trajectories = np.loadtxt(traj_file).reshape((n_t + 1, n_s, 3))
+    trajectories = np.loadtxt(traj_file).reshape((n_t, n_s, 3))
     max_pos = np.max(np.linalg.norm(trajectories, axis=2))
     npt.assert_equal(max_pos < radius, True)
     npt.assert_almost_equal(max_pos, radius)
@@ -654,7 +241,7 @@ def test_sphere_diffusion():
     return
 
 
-def test_ellipsoid_diffusion():
+def test_ellipsoid_diffusion(tmp_path):
 
     # Walker trajectories
     n_s = int(1e2)
@@ -662,16 +249,14 @@ def test_ellipsoid_diffusion():
     diffusivity = 2e-9
     gradient, dt = example_gradient()
     gradient, dt = gradients.interpolate_gradient(gradient, dt, n_t)
-    traj_file = os.path.join(
-        os.path.dirname(simulations.__file__), "tests", "example_traj.txt"
-    )
+    traj_file = str(tmp_path / "example_traj.txt")
     radius = 5e-6
     semiaxes = np.ones(3) * radius
     substrate = substrates.ellipsoid(semiaxes)
     signals = simulations.simulation(
         n_s, diffusivity, gradient, dt, substrate, traj=traj_file
     )
-    trajectories = np.loadtxt(traj_file).reshape((n_t + 1, n_s, 3))
+    trajectories = np.loadtxt(traj_file).reshape((n_t, n_s, 3))
     max_pos = np.max(np.linalg.norm(trajectories, axis=2))
     npt.assert_equal(max_pos < radius, True)
     npt.assert_almost_equal(max_pos, radius)
@@ -716,7 +301,6 @@ def test_mesh_diffusion():
                 np.array([1, 5, 20]),
                 np.array([10, 10, 10]),
             ]:
-
                 substrate = substrates.mesh(
                     vertices,
                     faces,
@@ -747,9 +331,9 @@ def test_mesh_diffusion():
                         axis=1,
                     )
                 )
-                l = substrate.voxel_size[2]
+                voxel_z = substrate.voxel_size[2]
                 npt.assert_equal(np.min(pos[:, 2]) > 0, True)
-                npt.assert_equal(np.max(pos[:, 2]) < l, True)
+                npt.assert_equal(np.max(pos[:, 2]) < voxel_z, True)
                 npt.assert_equal(
                     np.max(
                         np.linalg.norm(
@@ -797,9 +381,9 @@ def test_mesh_diffusion():
                     axis=1,
                 )
             )
-            l = substrate.voxel_size[2]
+            voxel_z = substrate.voxel_size[2]
             npt.assert_equal(np.min(pos[:, 2]) < 0, True)
-            npt.assert_equal(np.max(pos[:, 2]) > l, True)
+            npt.assert_equal(np.max(pos[:, 2]) > voxel_z, True)
             npt.assert_equal(
                 np.max(
                     np.linalg.norm(

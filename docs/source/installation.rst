@@ -10,6 +10,8 @@ NVIDIA GPUs with compute capability 7.5 or higher. Install an NVIDIA driver
 compatible with the chosen CUDA version. Check your GPU on `NVIDIA's GPU list
 <https://developer.nvidia.com/cuda-gpus>`_ and driver requirements in the
 `CUDA release notes <https://developer.nvidia.com/cuda-toolkit-archive>`_.
+The base package installs the small CUDA 12 runtime library required when the
+CUDA backends are imported, including on machines running the CPU simulator.
 If the CUDA Toolkit is not installed system-wide, install the package with one
 set of toolkit components: ``python -m pip install 'disimpy[cuda12]'`` for CUDA
 12 or ``python -m pip install 'disimpy[cuda13]'`` for CUDA 13.
@@ -28,16 +30,19 @@ Use a virtual environment. Install a release with pip:
 
    python -m pip install disimpy
 
-For development from a source checkout, create the portable Conda environment
-and install the test dependencies:
+For development and CPU simulator tests from a source checkout, create the
+portable Conda environment and install the test dependencies. A CUDA Toolkit
+and NVIDIA driver are not needed for these tests:
 
 .. code-block:: console
 
    conda env create -f development_environment.yml
    conda activate disimpy
-   python -m pip install -e '.[test,cuda13]'
+   python -m pip install -e '.[test]'
 
-Use ``cuda12`` instead of ``cuda13`` when targeting CUDA 12.
+For physical GPU simulations, install the appropriate CUDA Toolkit components
+as well: ``python -m pip install -e '.[test,cuda13]'`` or use ``cuda12`` when
+targeting CUDA 12.
 
 Alternatively, install directly from GitHub:
 

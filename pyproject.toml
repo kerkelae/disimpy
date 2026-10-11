@@ -13,6 +13,7 @@ license-files = ["license.txt"]
 authors = [{name = "Leevi Kerkelä", email = "leevi.kerkela@protonmail.com"}]
 dependencies = [
     "matplotlib>=3.9",
+    "nvidia-cuda-runtime-cu12>=12.3,<13",
     "numba>=0.68",
     "numba-cuda-mlir==0.5.4",
     "numpy>=2",

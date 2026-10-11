@@ -21,6 +21,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - run: python -m pip install ".[test]"
+      - run: python -c "import disimpy, disimpy.gradients, disimpy.substrates, disimpy.simulations, disimpy.utils"
       - run: python -m pytest -m "not gpu"
 
   docs:
@@ -47,12 +48,12 @@ jobs:
           python -m venv /tmp/disimpy-wheel
           /tmp/disimpy-wheel/bin/python -m pip install dist/*.whl
           cd /tmp
-          /tmp/disimpy-wheel/bin/python -c "import disimpy, importlib.metadata; assert disimpy.__version__ == importlib.metadata.version('disimpy')"
+          /tmp/disimpy-wheel/bin/python -c "import disimpy, disimpy.gradients, disimpy.substrates, disimpy.simulations, disimpy.utils, importlib.metadata; assert disimpy.__version__ == importlib.metadata.version('disimpy')"
       - run: |
           python -m venv /tmp/disimpy-sdist
           /tmp/disimpy-sdist/bin/python -m pip install dist/*.tar.gz
           cd /tmp
-          /tmp/disimpy-sdist/bin/python -c "import disimpy, importlib.metadata; assert disimpy.__version__ == importlib.metadata.version('disimpy')"
+          /tmp/disimpy-sdist/bin/python -c "import disimpy, disimpy.gradients, disimpy.substrates, disimpy.simulations, disimpy.utils, importlib.metadata; assert disimpy.__version__ == importlib.metadata.version('disimpy')"
 
   style:
     runs-on: ubuntu-latest

@@ -89,11 +89,15 @@ root:
 
    NUMBA_ENABLE_CUDASIM=1 python -m pytest -q -m 'not gpu'
 
-The full numerical suite needs a physical GPU:
+The GitHub Actions test job runs this lightweight CPU and CUDA simulator
+suite. Before merging code, the developer is responsible for verifying
+that Disimpy still runs on a supported physical GPU. Install the appropriate
+``cuda12`` or ``cuda13`` extra, disable the simulator, and run the full
+numerical suite:
 
 .. code-block::
 
-   python -m pytest -q
+   env -u NUMBA_ENABLE_CUDASIM python -m pytest -q
 
 Documentation
 #############
@@ -113,6 +117,6 @@ Releasing
 
 Follow the `release guide
 <https://github.com/kerkelae/disimpy/blob/main/RELEASING.md>`_ for version and
-tag rules, physical GPU validation, the exact-commit ``main`` CI gate, and
+tag rules, developer GPU validation, the exact-commit ``main`` CI gate, and
 PyPI publishing. Review the release notes and artifacts before publishing the
 GitHub Release.

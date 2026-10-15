@@ -1,0 +1,5 @@
+# Install from the repository root to get Disimpy and its development tools.
+-e .[test,docs]
+build
+ruff
+twine

@@ -5,11 +5,69 @@ microstructure.
 """
 
 import numpy as np
-import numba
+
+from . import _mesh
+
+_PREPARED_MESH_ATTRIBUTES = frozenset(
+    (
+        "type",
+        "vertices",
+        "faces",
+        "n_membrane_faces",
+        "voxel_size",
+        "periodic",
+        "n_sv",
+        "triangle_data",
+        "xs",
+        "ys",
+        "zs",
+        "triangle_indices",
+        "subvoxel_indices",
+        "_mesh_prepared",
+    )
+)
 
 
 class _Substrate:
     """Class for storing information about the simulated microstructure."""
+
+    def __setattr__(self, name, value):
+        if self.__dict__.get("_mesh_prepared", False) and name in (
+            _PREPARED_MESH_ATTRIBUTES
+        ):
+            raise AttributeError(f"prepared mesh attribute '{name}' is read-only")
+        if self.__dict__.get("_mesh_prepared", False) and name == "init_pos":
+            if isinstance(value, np.ndarray):
+                if (
+                    value.ndim != 2
+                    or value.shape[1] != 3
+                    or not np.issubdtype(value.dtype, np.floating)
+                    or not np.all(np.isfinite(value))
+                    or np.any(value < 0)
+                    or np.any(value > self.voxel_size)
+                ):
+                    raise ValueError("Invalid mesh init_pos array for voxel")
+                value = np.array(value, copy=True, order="C")
+                value.flags.writeable = False
+            elif isinstance(value, str) and value in ("uniform", "intra", "extra"):
+                if value in ("intra", "extra"):
+                    _mesh._validate_closed_surface(
+                        self.vertices,
+                        self.faces[: self.n_membrane_faces],
+                        value,
+                    )
+            else:
+                raise ValueError(
+                    "Mesh init_pos must be an array, 'uniform', 'intra', or 'extra'"
+                )
+        object.__setattr__(self, name, value)
+
+    def __delattr__(self, name):
+        if self.__dict__.get("_mesh_prepared", False) and (
+            name in _PREPARED_MESH_ATTRIBUTES or name == "init_pos"
+        ):
+            raise AttributeError(f"prepared mesh attribute '{name}' is read-only")
+        object.__delattr__(self, name)
 
     def __init__(self, substrate_type, **kwargs):
         self.type = substrate_type
@@ -22,13 +80,26 @@ class _Substrate:
             self.semiaxes = kwargs["semiaxes"]
             self.R = kwargs["R"]
         elif self.type == "mesh":
-            self.vertices = kwargs["vertices"]
-            self.faces = kwargs["faces"]
-            self.voxel_size = kwargs["voxel_size"]
+            # Geometry and lookup data form one prepared acceleration object.
+            # Own every array so later changes to the constructor arguments
+            # cannot make the packed triangles and CSR lookup disagree.
+            self.vertices = np.array(kwargs["vertices"], copy=True, order="C")
+            self.faces = np.array(kwargs["faces"], copy=True, order="C")
+            # Faces added for a nonperiodic voxel are physical walls, not
+            # permeable membrane triangles.
+            self.n_membrane_faces = kwargs["n_membrane_faces"]
+            self.voxel_size = np.array(kwargs["voxel_size"], copy=True, order="C")
             self.periodic = kwargs["periodic"]
-            self.init_pos = kwargs["init_pos"]
-            self.n_sv = kwargs["n_sv"]
+            self.init_pos = (
+                np.array(kwargs["init_pos"], copy=True, order="C")
+                if isinstance(kwargs["init_pos"], np.ndarray)
+                else kwargs["init_pos"]
+            )
+            self.n_sv = np.array(kwargs["n_sv"], copy=True, order="C")
             self.perm_prob = kwargs["perm_prob"]
+            self.triangle_data = _mesh._pack_triangle_geometry(
+                self.vertices, self.faces
+            )
             if not kwargs["quiet"]:
                 print("Dividing the mesh into subvoxels")
             (
@@ -37,11 +108,27 @@ class _Substrate:
                 self.zs,
                 self.triangle_indices,
                 self.subvoxel_indices,
-            ) = _mesh_space_subdivision(
+            ) = _mesh._mesh_space_subdivision(
                 self.vertices, self.faces, self.voxel_size, self.n_sv
             )
+            for prepared in (
+                self.vertices,
+                self.faces,
+                self.voxel_size,
+                self.n_sv,
+                self.triangle_data,
+                self.xs,
+                self.ys,
+                self.zs,
+                self.triangle_indices,
+                self.subvoxel_indices,
+            ):
+                prepared.flags.writeable = False
+            if isinstance(self.init_pos, np.ndarray):
+                self.init_pos.flags.writeable = False
             if not kwargs["quiet"]:
                 print("Finished dividing the mesh into subvoxels")
+            self._mesh_prepared = True
 
 
 def free():
@@ -67,7 +154,7 @@ def sphere(radius):
     -------
     substrate : disimpy.substrates._Substrate
     """
-    if not isinstance(radius, float) or radius <= 0:
+    if not isinstance(radius, float) or not np.isfinite(radius) or radius <= 0:
         raise ValueError(f"Incorrect value ({radius}) for radius")
     substrate = _Substrate("sphere", radius=radius)
     return substrate
@@ -89,15 +176,22 @@ def cylinder(radius, orientation):
     -------
     substrate : disimpy.substrates._Substrate
         Substrate object.
+
     """
-    if not isinstance(radius, float) or radius <= 0:
+    if not isinstance(radius, float) or not np.isfinite(radius) or radius <= 0:
         raise ValueError(f"Incorrect value ({radius}) for radius")
     if (
         not isinstance(orientation, np.ndarray)
         or orientation.shape != (3,)
         or not np.issubdtype(orientation.dtype, np.floating)
+        or not np.all(np.isfinite(orientation))
     ):
         raise ValueError(f"Incorrect value ({orientation}) for orientation")
+    # Scale first so normalization remains stable for very large finite vectors.
+    scale = np.max(np.abs(orientation))
+    if scale == 0:
+        raise ValueError(f"Incorrect value ({orientation}) for orientation")
+    orientation = orientation / scale
     orientation = orientation / np.linalg.norm(orientation)
     substrate = _Substrate("cylinder", radius=radius, orientation=orientation)
     return substrate
@@ -124,17 +218,18 @@ def ellipsoid(semiaxes, R=np.eye(3)):
         not isinstance(semiaxes, np.ndarray)
         or semiaxes.shape != (3,)
         or not np.issubdtype(semiaxes.dtype, np.floating)
+        or not np.all(np.isfinite(semiaxes))
+        or np.any(semiaxes <= 0)
     ):
         raise ValueError(f"Incorrect value ({semiaxes}) for semiaxes")
     if (
         not isinstance(R, np.ndarray)
         or R.shape != (3, 3)
         or not np.issubdtype(R.dtype, np.floating)
+        or not np.all(np.isfinite(R))
     ):
         raise ValueError(f"Incorrect value ({R}) for R")
-    elif not np.isclose(np.linalg.det(R), 1) or not np.all(
-        np.isclose(R.T, np.linalg.inv(R))
-    ):
+    elif not np.isclose(np.linalg.det(R), 1) or not np.allclose(R.T @ R, np.eye(3)):
         raise ValueError(f"R ({R}) is not a valid rotation matrix")
     substrate = _Substrate("ellipsoid", semiaxes=semiaxes, R=R)
     return substrate
@@ -191,33 +286,63 @@ def mesh(
     quiet : bool, optional
         If True, updates on computation progress are not printed.
     perm_prob : float, optional
-        Probability that a spin passes through a triangle.
+        Probability that a spin passes through a triangle on each encounter.
+        This is a dimensionless, time-step-specific numerical parameter.
 
     Returns
     -------
     substrate : disimpy.substrates._Substrate
         Substrate object.
+
+    Notes
+    -----
+    Mesh geometry, subdivision, and array-valued initial positions are copied
+    into the returned object. Prepared arrays are read-only and their
+    attributes cannot be replaced, keeping packed triangle data and subvoxel
+    lookup coherent. The ``init_pos`` attribute can still be replaced between
+    simulations; a replacement is validated, and arrays are copied.
+
+    Before preparation, repeated indexed faces and coincident same-oriented
+    faces are reduced to their first occurrence, and zero-area faces are
+    removed. Opposite-oriented coincident faces retain their first occurrence;
+    a redundant folded flap must be repaired explicitly in the input mesh.
+    Coordinate coincidence for this normalization requires exact equality.
+
+    Compartment sampling checks that every geometric edge has two incident
+    faces after vertices equal within floating-point roundoff are merged. It
+    does not detect self-intersections, overlapping faces, or nonmanifold
+    vertex links; meshes with those features are unsupported.
     """
     if (
         not isinstance(vertices, np.ndarray)
         or vertices.ndim != 2
         or vertices.shape[1] != 3
+        or vertices.shape[0] < 3
         or not np.issubdtype(vertices.dtype, np.floating)
+        or not np.all(np.isfinite(vertices))
     ):
         raise ValueError(f"Incorrect value ({vertices}) for vertices.")
     if (
         not isinstance(faces, np.ndarray)
         or faces.ndim != 2
         or faces.shape[1] != 3
+        or faces.shape[0] == 0
         or not np.issubdtype(faces.dtype, np.integer)
     ):
         raise ValueError(f"Incorrect value ({faces}) for faces.")
+    if np.any(faces < 0) or np.any(faces >= len(vertices)):
+        raise ValueError("faces contains a vertex index outside vertices")
+    if np.any(np.diff(np.sort(faces, axis=1), axis=1) == 0):
+        raise ValueError("faces contains a triangle with repeated vertex indices")
+    faces = _mesh._normalize_mesh_faces(vertices, faces)
     if not isinstance(periodic, bool):
         raise ValueError(f"Incorrect value ({periodic}) for periodic")
     if (
         not isinstance(padding, np.ndarray)
         or padding.shape != (3,)
         or not np.issubdtype(padding.dtype, np.floating)
+        or not np.all(np.isfinite(padding))
+        or np.any(padding < 0)
     ):
         raise ValueError(f"Incorrect value ({padding}) for padding")
     if isinstance(init_pos, np.ndarray):
@@ -225,6 +350,7 @@ def mesh(
             init_pos.ndim != 2
             or init_pos.shape[1] != 3
             or not np.issubdtype(init_pos.dtype, np.floating)
+            or not np.all(np.isfinite(init_pos))
         ):
             raise ValueError(f"Incorrect value ({init_pos}) for init_pos")
     elif isinstance(init_pos, str):
@@ -236,29 +362,37 @@ def mesh(
         not isinstance(n_sv, np.ndarray)
         or n_sv.shape != (3,)
         or not np.issubdtype(n_sv.dtype, np.integer)
+        or np.any(n_sv <= 0)
     ):
         raise ValueError(f"Incorrect value ({n_sv}) for n_sv")
     if (
         (perm_prob != 0 and not isinstance(perm_prob, float))
+        or not np.isfinite(perm_prob)
         or perm_prob < 0
         or perm_prob > 1
     ):
         raise ValueError(f"Incorrect value ({perm_prob}) for perm_prob.")
+    if not isinstance(quiet, bool):
+        raise ValueError(f"Incorrect value ({quiet}) for quiet")
+
+    if isinstance(init_pos, str) and init_pos in ("intra", "extra"):
+        _mesh._validate_closed_surface(vertices, faces, init_pos)
     if not quiet:
         print("Aligning the corner of the simulated voxel with the origin")
-    shift = -np.min(vertices, axis=0) + padding
-    vertices = vertices + shift
+    vertices, faces, voxel_size, n_membrane_faces, shift = _mesh._prepare_mesh_geometry(
+        vertices, faces, padding, periodic
+    )
     if not quiet:
         print(f"Moved the vertices by {shift}")
-    voxel_size = np.max(vertices, axis=0) + padding
-    if not periodic:  # Add the voxel boundaries to the triangles
-        voxel_vertices, voxel_faces = _aabb_to_mesh(np.zeros(3), voxel_size)
-        faces = np.vstack((faces, voxel_faces + len(vertices)))
-        vertices = np.vstack((vertices, voxel_vertices))
+    if isinstance(init_pos, np.ndarray) and (
+        np.any(init_pos < 0) or np.any(init_pos > voxel_size)
+    ):
+        raise ValueError("init_pos contains a point outside the simulated voxel")
     substrate = _Substrate(
         "mesh",
         vertices=vertices,
         faces=faces,
+        n_membrane_faces=n_membrane_faces,
         voxel_size=voxel_size,
         n_sv=n_sv,
         periodic=periodic,
@@ -267,304 +401,3 @@ def mesh(
         perm_prob=perm_prob,
     )
     return substrate
-
-
-@numba.jit(nopython=True)
-def _cross_product(a, b):
-    """Compiled function for calculating the cross product between two 1D
-    arrays of length 3."""
-    c = np.zeros(3)
-    c[0] = a[1] * b[2] - a[2] * b[1]
-    c[1] = a[2] * b[0] - a[0] * b[2]
-    c[2] = a[0] * b[1] - a[1] * b[0]
-    return c
-
-
-@numba.jit(nopython=True)
-def _dot_product(a, b):
-    """Compiled function for calculating the dot product between two 1D arrays
-    of length 3."""
-    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
-
-
-@numba.jit(nopython=True)
-def _triangle_box_overlap(triangle, box):
-    """Check if a triangle overlaps with a box.
-
-    Parameters
-    ----------
-    triangle : numpy.ndarray
-        Array with shape (3, 3) where the first dimension corresponds to the
-        points of the triangle.
-    box : numpy.ndarray
-        Array with shape (2, 3) so that box[0, :] and box[1, :] are the corners
-        closest to and furthest from the origin.
-
-    Returns
-    -------
-    bool
-
-    Notes
-    -----
-    This function is based on an algorithm by Tomas Akenine-Möller presented
-    in the manuscript "More Fast 3D Triangle-Box Overlap Testing".
-    """
-
-    # Move the box and triangle so that the box's centre is at the origin
-    c = np.array([np.mean(box[:, i]) for i in range(3)])
-    h = np.abs(box[1] - box[0]) / 2
-    v = triangle - c
-    e = np.eye(3)
-
-    # Test the triangle AABB against the box
-    box_aabb = np.array(
-        [[np.min(v[:, i]) for i in range(3)], [np.max(v[:, i]) for i in range(3)]]
-    )
-    if np.all(box_aabb[0] > h) or np.all(box_aabb[1] < -h):
-        return False
-
-    # Test the plane in which the triangle is against the box
-    f = np.array(
-        [
-            [v[1, 0] - v[0, 0], v[1, 1] - v[0, 1], v[1, 2] - v[0, 2]],
-            [v[2, 0] - v[1, 0], v[2, 1] - v[1, 1], v[2, 2] - v[1, 2]],
-            [v[0, 0] - v[2, 0], v[0, 1] - v[2, 1], v[0, 2] - v[2, 2]],
-        ]
-    )
-    normal = _cross_product(f[0], f[1])
-    corners = np.array(
-        [
-            [h[0], h[1], h[2]],
-            [-h[0], -h[1], -h[2]],
-            [-h[0], h[1], h[2]],
-            [h[0], -h[1], -h[2]],
-            [h[0], -h[1], h[2]],
-            [-h[0], h[1], -h[2]],
-            [h[0], h[1], -h[2]],
-            [-h[0], -h[1], h[2]],
-        ]
-    )
-    in_plane = False
-    behind = np.zeros(8, dtype=numba.boolean)
-    for i, point in enumerate(corners):
-        dp = _dot_product(normal, v[0] - point)
-        if dp == 0:
-            in_plane = True
-        else:
-            behind[i] = _dot_product(normal, v[0] - point) > 0
-    if not in_plane and (np.all(behind) or np.all(~behind)):
-        return False
-
-    # Test the triangle against the box
-    p = np.zeros(3)
-    for i in range(3):
-        for j in range(3):
-            a = _cross_product(e[i], f[j])
-            r = _dot_product(h, np.abs(a))
-            for k in range(3):
-                p[k] = _dot_product(a, v[k])
-            if np.min(p) > r or np.max(p) < -r:
-                return False
-    return True
-
-
-@numba.jit(nopython=True)
-def _interval_sv_overlap(xs, x1, x2):
-    """Return the indices of subvoxels that overlap with interval [x1, x2].
-
-    Parameters
-    ----------
-    xs : numpy.ndarray
-        Array of subvoxel boundaries.
-    x1 : float
-        Start/end point of the interval.
-    x2 : float
-        End/start point of the interval.
-
-    Returns
-    -------
-    ll : float
-        Lowest subvoxel index of the overlapping subvoxels.
-    ul : float
-        Highest subvoxel index of the overlapping subvoxels.
-    """
-    xmin = min(x1, x2)
-    xmax = max(x1, x2)
-    if xmin <= xs[0]:
-        ll = 0
-    elif xmin >= xs[-1]:
-        ll = len(xs) - 1
-    else:
-        ll = 0
-        for i, x in enumerate(xs):
-            if x > xmin:
-                ll = i - 1
-                break
-    if xmax >= xs[-1]:
-        ul = len(xs) - 1
-    elif xmax <= xs[0]:
-        ul = 0
-    else:
-        ul = len(xs) - 1
-        for i, x in enumerate(xs):
-            if not x < xmax:
-                ul = i
-                break
-    if ll != ul:
-        return ll, ul
-    else:
-        if ll != len(xs) - 1:
-            return ll, ul + 1
-        else:
-            return ll - 1, ul
-
-
-@numba.jit(nopython=True)
-def _triangle_aabb(triangle):
-    """Calculate the axis-aligned bounding box of a triangle and return its
-    closest and furthest points to the origin.
-
-    Parameters
-    ----------
-    triangle : numpy.ndarray
-        Array with shape (3, 3) where the first dimension corresponds to the
-        points of the triangle.
-
-    Returns
-    -------
-    numpy.ndarray
-    """
-    aabb = np.zeros((2, 3))
-    for i in range(3):
-        aabb[0, i] = np.min(triangle[:, i])
-        aabb[1, i] = np.max(triangle[:, i])
-    return aabb
-
-
-@numba.jit(nopython=True)
-def _box_subvoxel_overlap(box, xs, ys, zs):
-    """Find the subvoxels which with a box overlaps and return the lowest and
-    highest index of the subvoxels along each axis.
-
-    Parameters
-    ----------
-    box : numpy.ndarray
-        Array with shape (2, 3) so that box[0, :] and box[1, :] are the corners
-        closest to and furthest from the origin.
-    xs, ys, zs : numpy.ndarray
-        Subvoxel boundaries along each axis.
-
-    Returns
-    -------
-    numpy.ndarray
-    """
-    subvoxels = np.zeros((3, 2), dtype=np.int32)
-    for i, a in enumerate([xs, ys, zs]):
-        subvoxels[i] = _interval_sv_overlap(a, box[0, i], box[1, i])
-    return subvoxels
-
-
-def _mesh_space_subdivision(vertices, faces, voxel_size, n_sv):
-    """Divide the voxel into subvoxels and return arrays for finding the
-    triangles in given a subvoxel.
-
-    Parameters
-    ----------
-    vertices : numpy.ndarray
-        Floating-point array with shape (number of vertices, 3) containing the
-        vertices of the triangular mesh.
-    faces : numpy ndarray
-        Integer array with shape (number of triangles, 3) containing the vertex
-        indices of the points of the triangles.
-    voxel_size : numpy.ndarray
-        Floating-point array with shape (3,).
-    n_sv : numpy.ndarray
-        Integer array of size (3,) defining the number of subvoxels along each
-        axis.
-
-    Returns
-    -------
-    xs : numpy.ndarray
-        Floating-point array with shape (n_sv[0],) containing the subvoxel
-        boundaries along the x-axis.
-    ys : numpy.ndarray
-        Floating-point array with shape (n_sv[1],) containing the subvoxel
-        boundaries along the y-axis.
-    zs : numpy.ndarray
-        Floating-point array with shape (n_sv[2],) containing the subvoxel
-        boundaries along the z-axis.
-    triangle_indices : numpy.ndarray
-        One-dimensional integer array containing the triangle indices for all
-        subvoxels.
-    subvoxel_indices : numpy.ndarray
-        Two-dimensional integer array that enables the triangles of a given
-        subvoxel to be located in triangle_indices. The triangles in subvoxel i
-        are the elements from subvoxel_indices[i, 0] to subvoxel_indices[i, 1].
-    """
-
-    # Define the subvoxel boundaries
-    xs = np.linspace(0, voxel_size[0], n_sv[0] + 1)
-    ys = np.linspace(0, voxel_size[1], n_sv[1] + 1)
-    zs = np.linspace(0, voxel_size[2], n_sv[2] + 1)
-    relevant_triangles = [[] for _ in range(np.prod(n_sv))]
-
-    # Loop over the triangles
-    for i, idx in enumerate(faces):
-        triangle = vertices[idx]
-        subvoxels = _box_subvoxel_overlap(_triangle_aabb(triangle), xs, ys, zs)
-        for x in range(subvoxels[0, 0], subvoxels[0, 1]):
-            for y in range(subvoxels[1, 0], subvoxels[1, 1]):
-                for z in range(subvoxels[2, 0], subvoxels[2, 1]):
-                    box = np.array(
-                        [[xs[x], ys[y], zs[z]], [xs[x + 1], ys[y + 1], zs[z + 1]]]
-                    )
-                    if _triangle_box_overlap(triangle, box):
-                        subvoxel = x * n_sv[1] * n_sv[2] + y * n_sv[2] + z
-                        relevant_triangles[subvoxel].append(i)
-
-    # Make the final arrays
-    triangle_indices = []
-    subvoxel_indices = np.zeros((len(relevant_triangles), 2))
-    counter = 0
-    for i, l in enumerate(relevant_triangles):
-        triangle_indices += l
-        subvoxel_indices[i, 0] = counter
-        subvoxel_indices[i, 1] = counter + len(l)
-        counter += len(l)
-    triangle_indices = np.array(triangle_indices).astype(int)
-    subvoxel_indices = subvoxel_indices.astype(int)
-    return xs, ys, zs, triangle_indices, subvoxel_indices
-
-
-def _aabb_to_mesh(a, b):
-    """Return a triangular mesh that corresponds to an axis-aligned bounding
-    box defined by points a and b."""
-    vertices = np.array(
-        [
-            [a[0], a[1], a[2]],
-            [b[0], a[1], a[2]],
-            [b[0], b[1], a[2]],
-            [b[0], b[1], b[2]],
-            [a[0], b[1], b[2]],
-            [a[0], a[1], b[2]],
-            [a[0], b[1], a[2]],
-            [b[0], a[1], b[2]],
-        ]
-    )
-    faces = np.array(
-        [
-            [0, 1, 2],
-            [0, 6, 2],
-            [5, 7, 3],
-            [5, 4, 3],
-            [1, 2, 3],
-            [1, 7, 3],
-            [0, 6, 4],
-            [0, 5, 4],
-            [0, 1, 7],
-            [0, 5, 7],
-            [6, 2, 3],
-            [6, 4, 3],
-        ]
-    )
-    return vertices, faces

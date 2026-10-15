@@ -1,6 +1,10 @@
 import os
+
 import pytest
-from . import test_utils, test_simulations, test_gradients
+
+from . import test_gradients as test_gradients
+from . import test_simulations as test_simulations
+from . import test_utils
 
 
 def test_all():

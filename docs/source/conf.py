@@ -10,8 +10,10 @@
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 
+import ast
 import os
 import sys
+from pathlib import Path
 
 sys.path.insert(0, os.path.abspath(".."))
 
@@ -22,8 +24,15 @@ project = "Disimpy"
 copyright = " Leevi Kerkelä"
 author = "Leevi Kerkelä"
 
-# The full version, including alpha/beta/rc tags
-release = "0.3.0"
+# The full version, including alpha/beta/rc tags, from the package source.
+version_file = Path(__file__).resolve().parents[2] / "disimpy" / "_version.py"
+release = ast.literal_eval(version_file.read_text(encoding="utf-8").split("=", 1)[1])
+docs_channel = os.environ.get("READTHEDOCS_VERSION")
+version_label = f"v{release}"
+if docs_channel == "latest":
+    version_label += " (development)"
+elif docs_channel == "stable":
+    version_label += " (stable)"
 
 
 # -- General configuration ---------------------------------------------------
@@ -36,6 +45,7 @@ extensions = [
     "sphinx.ext.napoleon",
     "nbsphinx",
 ]
+nbsphinx_execute = "never"
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]
@@ -64,6 +74,7 @@ html_static_path = ["_static"]
 html_logo = "_static/logo.png"
 
 html_theme_options = {
+    "announcement": f"{project} {version_label} documentation",
     "sidebar_hide_name": True,
 }
 

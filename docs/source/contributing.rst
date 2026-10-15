@@ -45,55 +45,78 @@ pull requests
 proposing-changes-to-your-work-with-pull-requests/creating-a-pull-request-from-
 a-fork>`_.
 
-.. tip::
+Development environment
+#######################
 
-   When making changes to the code, it is recommended to use the `conda
-   environment
-   <https://conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html#creating-an-environment-from-an-environment-yml-file>`_
-   in the file ``development_environment.yml`` and to install the package in
-   editable mode by executing the following in the root directory of the
-   repository:
+Use a virtual environment for development. The provided Conda environment
+selects Python 3.11; other supported Python versions also work:
 
-   .. code-block::
+.. code-block:: console
 
-        pip install -e .
+   conda env create -f development_environment.yml
+   conda activate disimpy
+   python -m pip install -r requirements-dev.txt
+
+Run these commands from the repository root. ``requirements-dev.txt`` installs
+Disimpy in editable mode with its test and documentation extras, plus Ruff,
+build, and Twine. These tools are separate from the package's runtime
+requirements. The fast CPU and CUDA simulator tests do not need a CUDA Toolkit
+or NVIDIA driver.
+
+For physical GPU simulations, install the CUDA Toolkit components for your
+target version as well:
+
+.. code-block:: console
+
+   python -m pip install -e '.[cuda13]'
+
+Use ``cuda12`` in place of ``cuda13`` when targeting CUDA 12.
 
 Code style
 ##########
 
-All code should be formatted with `Black <https://github.com/psf/black>`_ using
-the default settings and documented following the `Numpy docstring conventions
-<https://numpydoc.readthedocs.io/en/latest/format.html>`_ (except trivial
-internal functions).
+Format new and refactored Python modules with Ruff. Use the `NumPy docstring
+conventions <https://numpydoc.readthedocs.io/en/latest/format.html>`_ for
+public functions.
 
 Tests
 #####
 
-It is important to make sure that your changes have not broken
-anything by running all tests:
+Run the fast CPU and CUDA simulator tests without a GPU from the repository
+root:
 
-.. code-block:: python
+.. code-block::
 
-   from disimpy.tests import test_all
-   test_all()
+   NUMBA_ENABLE_CUDASIM=1 python -m pytest -q -m 'not gpu'
+
+The GitHub Actions test job runs this lightweight CPU and CUDA simulator
+suite. Before merging code, the developer is responsible for verifying
+that Disimpy still runs on a supported physical GPU. Install the appropriate
+``cuda12`` or ``cuda13`` extra, disable the simulator, and run the full
+numerical suite:
+
+.. code-block::
+
+   env -u NUMBA_ENABLE_CUDASIM python -m pytest -q
 
 Documentation
 #############
 
-If you make changes to the documentation, you should build it locally to
-confirm that it works as expected by executing the following in
-``docs``:
+After installing the documentation extra, build the documentation from the
+repository root. Install Pandoc first (for example, ``conda install
+-c conda-forge pandoc``) so nbsphinx can convert the tutorial notebooks:
 
 .. code-block::
 
-    make clean
-    make html
+    sphinx-build -b html -W --keep-going docs/source docs/_build/html
 
-This will generate a local copy of the documentation in ``docs/_build/html``.
-Once the changes are merged with the master branch, the online documentation is
-automatically updated. Requirements for generating the documentation locally
-are listed in ``docs/requirements.txt``, and they can be installed with pip:
+The generated HTML is in ``docs/_build/html``.
 
-.. code-block::
+Releasing
+#########
 
-    pip install -r docs/requirements.txt
+Follow the `release guide
+<https://github.com/kerkelae/disimpy/blob/main/RELEASING.md>`_ for version and
+tag rules, developer GPU validation, the exact-commit ``main`` CI gate, and
+PyPI publishing. Review the release notes and artifacts before publishing the
+GitHub Release.

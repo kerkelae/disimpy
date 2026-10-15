@@ -2,53 +2,73 @@
 Installation
 ************
 
-Hardware requirements
-#####################
-
-You need an Nvidia CUDA-capable GPU with compute capability 2.0 or above with
-the appropriate Nvidia driver. You can check if your GPU is supported on
-`Nvidia's website <https://developer.nvidia.com/cuda-gpus>`_.
-
-Software requirements
-#####################
-
-You need the CUDA Toolkit (version 8.0 or above), which can be installed `using
-Conda <https://numba.pydata.org/numba-doc/dev/cuda/overview.html#software>`_
-(recommended) or from `Nvidia <https://developer.nvidia.com/cuda-toolkit>`_.
-Make sure that the version you install supports your Nvidia driver or upgrade
-the driver. The driver requirements of each CUDA Toolkit version can be found in
-the `release notes <https://developer.nvidia.com/cuda-toolkit-archive>`_. If you
-use the CUDA Toolkit not installed by Conda and encounter issues, check that the
-`installation path is configured so that Numba can access it
-<https://numba.pydata.org/numba-doc/dev/cuda/overview.html#setting-cuda-installation-path>`_.
-
-Installation
+Requirements
 ############
 
-It is strongly recommended to install Disimpy in a virtual environment. The
-most recent release can be installed with pip:
+Disimpy supports Python 3.11–3.14. GPU execution targets CUDA 12 or 13 and
+NVIDIA GPUs with compute capability 7.5 or higher. Install an NVIDIA driver
+compatible with the chosen CUDA version. Check your GPU on `NVIDIA's GPU list
+<https://developer.nvidia.com/cuda-gpus>`_ and driver requirements in the
+`CUDA release notes <https://developer.nvidia.com/cuda-toolkit-archive>`_.
+The base package installs the small CUDA 12 runtime library required when the
+CUDA backends are imported, including on machines running the CPU simulator.
+If the CUDA Toolkit is not installed system-wide, install the package with one
+set of toolkit components: ``python -m pip install 'disimpy[cuda12]'`` for CUDA
+12 or ``python -m pip install 'disimpy[cuda13]'`` for CUDA 13.
 
-.. code-block::
+GPU execution uses Numba-CUDA-MLIR. The test extra also installs legacy
+Numba-CUDA so its `CUDA simulator
+<https://nvidia.github.io/numba-cuda/user/simulator.html>`_ can run small tests
+on a CPU. Simulator results do not validate MLIR compilation or GPU performance.
 
-    pip install disimpy
+Install the package
+###################
 
-For advanced users
-******************
+Use a virtual environment. Install a release with pip:
 
-The package can also be installed directly from source (note that you can
-specify things such as branch and commit):
+.. code-block:: console
 
-.. code-block::
+   python -m pip install disimpy
 
-    pip install git+https://github.com/kerkelae/disimpy.git
+For development and CPU simulator tests from a source checkout, create the
+portable Conda environment and install the development requirements. This
+installs Disimpy in editable mode, its test and documentation extras, and the
+Ruff, build, and Twine tools. A CUDA Toolkit and NVIDIA driver are not needed
+for these tests:
 
-Automated tests
-###############
+.. code-block:: console
 
-To confirm that the installed simulator works, you should run tests by executing
-the following in the Python interpreter:
+   conda env create -f development_environment.yml
+   conda activate disimpy
+   python -m pip install -r requirements-dev.txt
 
-.. code-block:: python
+For physical GPU simulations, install the appropriate CUDA Toolkit components
+as well: ``python -m pip install -e '.[cuda13]'`` or use ``cuda12`` when
+targeting CUDA 12.
 
-   from disimpy.tests import test_all
-   test_all()
+Alternatively, install directly from GitHub:
+
+.. code-block:: console
+
+   python -m pip install git+https://github.com/kerkelae/disimpy.git
+
+Run tests
+#########
+
+From the source checkout, run the small CPU and legacy CUDA simulator tests
+without a GPU:
+
+.. code-block:: console
+
+   NUMBA_ENABLE_CUDASIM=1 python -m pytest -q -m 'not gpu'
+
+Set ``NUMBA_ENABLE_CUDASIM`` before Python imports Disimpy. This selects the
+legacy simulator backend. The full numerical suite requires a supported
+physical GPU and the MLIR backend. Run it with the simulator disabled:
+
+.. code-block:: console
+
+   python -m pytest -q
+
+The installed package also exposes ``disimpy.tests.test_all()`` for the full
+suite when the ``test`` extra is installed.

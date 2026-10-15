@@ -1,12 +1,9 @@
 """This module contains tests of the utils module."""
 
-import os
 import numpy as np
 import numpy.testing as npt
-import matplotlib.pyplot as plt
 
 from .. import utils
-
 
 SEED = 123
 
@@ -26,3 +23,21 @@ def test_vec2vec_rotmat():
         b /= np.linalg.norm(b)
         npt.assert_array_almost_equal(a, b)
     return
+
+
+def test_vec2vec_rotmat_antiparallel_is_proper_rotation():
+    for v in (np.array([1.0, 0.0, 0.0]), np.array([1.0, 2.0, -3.0])):
+        R = utils.vec2vec_rotmat(v, -v)
+        npt.assert_allclose(R @ v, -v, atol=1e-14)
+        npt.assert_allclose(R.T @ R, np.eye(3), atol=1e-14)
+        npt.assert_allclose(np.linalg.det(R), 1, atol=1e-14)
+
+
+def test_vec2vec_rotmat_normalizes_extreme_finite_vectors_stably():
+    for scale in (np.finfo(float).max / 4, np.nextafter(0.0, 1.0)):
+        v = np.array([scale, 0.0, 0.0])
+        k = np.array([0.0, -scale, 0.0])
+        R = utils.vec2vec_rotmat(v, k)
+        npt.assert_allclose(R @ np.array([1.0, 0.0, 0.0]), [0.0, -1.0, 0.0], atol=1e-14)
+        npt.assert_allclose(R.T @ R, np.eye(3), atol=1e-14)
+        npt.assert_allclose(np.linalg.det(R), 1, atol=1e-14)

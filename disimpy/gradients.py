@@ -14,6 +14,12 @@ from . import utils
 GAMMA = 267.513e6  # Gyromagnetic ratio of the simulated spins
 
 
+def _validate_dt(dt):
+    """Validate the time between adjacent gradient samples."""
+    if not isinstance(dt, (float, np.floating)) or not np.isfinite(dt) or dt <= 0:
+        raise ValueError("dt must be a finite positive float")
+
+
 def _validate_gradient(gradient, dt=None):
     """Validate the shared gradient-array representation."""
     if (
@@ -29,10 +35,8 @@ def _validate_gradient(gradient, dt=None):
             "gradient must be a finite floating-point array with shape "
             "(measurements, at least two time points, 3)"
         )
-    if dt is not None and (
-        not isinstance(dt, (float, np.floating)) or not np.isfinite(dt) or dt <= 0
-    ):
-        raise ValueError("dt must be a finite positive float")
+    if dt is not None:
+        _validate_dt(dt)
 
 
 def _bvalue_array(bvals, n_measurements=None):
@@ -116,6 +120,14 @@ def calc_q(gradient, dt):
 
 def calc_b(gradient, dt):
     """Calculate b-values of the gradient array.
+
+    The gradient is linear between samples. The b-value is the exact integral
+    of ``|q(T) - q(t)|**2`` over the ``N - 1`` intervals, where ``q(t)`` is
+    the time integral of the gradient times the gyromagnetic ratio. Subtracting
+    ``q(T)`` also defines the value for nonrephased waveforms. Before v0.4,
+    this function instead used trapezoidal integration of ``|q(t)|**2``;
+    results and amplitudes set by :func:`disimpy.gradients.set_b` can differ
+    on coarse grids.
 
     Parameters
     ----------
@@ -259,37 +271,29 @@ def pgse(delta, DELTA, n_t, bvals, bvecs):
     pulse_end = np.round(delta / reference_dt).astype(int)
     if pulse_end < 2:
         raise ValueError("PGSE pulses are under-resolved on the reference grid")
-    if pulse_end >= reference_n_t / 2:
-        # Preserve the original waveform when the pulses meet at DELTA=delta.
-        gradient = np.zeros((1, reference_n_t, 3))
-        gradient[0, 1:pulse_end, 0] = 1
-        gradient[0, -pulse_end:-1, 0] = -1
-        gradient, dt = interpolate_gradient(gradient, reference_dt, n_t)
+    # Only the changes in slope of the former million-sample reference array
+    # are needed to interpolate its piecewise-linear waveform.
+    source_indices = [0, 1, pulse_end - 1, pulse_end]
+    values = [0, 1, 1, 0]
+    if pulse_end >= reference_n_t // 2:
+        # At DELTA=delta, the positive and negative pulses meet directly.
+        values[-1] = -1
     else:
-        # The reference waveform is piecewise linear. Its eight breakpoints
-        # produce the same samples as interpolating the million-point array.
-        T = reference_dt * (reference_n_t - 1)
-        dt = T / (n_t - 1)
-        target_times = np.linspace(0, T, n_t)
-        source_times = np.array(
-            [
-                0,
-                1,
-                pulse_end - 1,
-                pulse_end,
-                reference_n_t - pulse_end - 1,
-                reference_n_t - pulse_end,
-                reference_n_t - 2,
-                reference_n_t - 1,
-            ],
-            dtype=float,
+        source_indices.extend(
+            [reference_n_t - pulse_end - 1, reference_n_t - pulse_end]
         )
-        source_times *= T / (reference_n_t - 1)
-        source_times[-1] = T  # np.linspace places its final point exactly at T.
-        values = np.array([0, 1, 1, 0, 0, -1, -1, 0])
-        gradient = np.zeros((1, n_t, 3))
-        gradient[0, :, 0] = np.interp(target_times, source_times, values)
+        values.extend([0, -1])
+    source_indices.extend([reference_n_t - 2, reference_n_t - 1])
+    values.extend([-1, 0])
+    source_indices, first_occurrence = np.unique(source_indices, return_index=True)
+    source_times = source_indices * reference_dt
+    source_times[-1] = T  # np.linspace places its final point exactly at T.
+    dt = T / (n_t - 1)
     target_times = np.linspace(0, T, n_t)
+    gradient = np.zeros((1, n_t, 3))
+    gradient[0, :, 0] = np.interp(
+        target_times, source_times, np.asarray(values)[first_occurrence]
+    )
     first_pulse = (target_times > 0) & (target_times < delta)
     second_pulse = (target_times > DELTA) & (target_times < T)
     if (

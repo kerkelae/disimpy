@@ -13,9 +13,18 @@ release workflow rejects development versions containing `.dev`.
 2. Wait for the **CI** workflow's **push** run on the exact `main` commit to
    succeed. A successful pull request run or a run for another commit does not
    satisfy the release gate.
-3. Check out that exact commit on a machine with a supported NVIDIA GPU.
-   Install the development requirements and the matching CUDA Toolkit extra,
-   then run the full numerical suite with the CUDA simulator disabled:
+3. Run **Physical GPU validation** from GitHub Actions on `main` after CI
+   succeeds. Choose `cuda12` or `cuda13` for the runner's driver. The workflow
+   requires a Linux x64 self-hosted runner labeled `disimpy-gpu`, with an
+   NVIDIA GPU of compute capability 7.5 or higher, a compatible driver, and
+   Python 3.11 available through `actions/setup-python`. It installs the test
+   and selected CUDA dependencies, confirms the MLIR backend sees a physical
+   GPU, and runs the GPU and shared tests. Simulator-only tests are covered by
+   CI. Wait for a successful run on the exact commit to be released.
+   GitHub-hosted standard runners do not provide a CUDA GPU.
+
+   To reproduce that check locally on the same commit, use a supported GPU
+   machine and run:
 
    ```sh
    python -m pip install -r requirements-dev.txt
@@ -23,19 +32,19 @@ release workflow rejects development versions containing `.dev`.
    env -u NUMBA_ENABLE_CUDASIM python -m pytest -q
    ```
 
-   CI runs the fast simulator suite on Python 3.11–3.14. That suite cannot
-   verify physical GPU execution or the MLIR backend, so review the full GPU
-   test result before publishing.
+   CI runs the fast simulator suite on Python 3.11–3.14. Review the physical
+   GPU workflow result before publishing.
 
 ## Publish
 
 1. Create a Git tag on the tested `main` commit with the matching version,
-   then push it. For example, after confirming `origin/main` points to the
-   intended commit:
+   then push it. Use the exact commit SHA shown by the successful CI and GPU
+   validation runs:
 
    ```sh
    git fetch origin main
-   git tag v0.4.0rc2 origin/main
+   read -r -p "Exact tested main commit SHA: " tested_sha
+   git tag v0.4.0rc2 "$tested_sha"
    git push origin v0.4.0rc2
    ```
 
@@ -48,13 +57,14 @@ release workflow rejects development versions containing `.dev`.
    GitHub Release.
 
 The release workflow checks that the tag's commit is on `main`, that the
-exact commit has a successful CI push run on `main`, and that the tag matches
-`disimpy/_version.py`. It then repeats the fast simulator tests, builds and
-checks the distributions with Twine, publishes to PyPI through the `pypi`
-GitHub environment and PyPI Trusted Publishing, and uploads the same files as
-GitHub Release assets. Check PyPI's trusted publisher configuration for the
-`kerkelae/disimpy` repository, `.github/workflows/release.yml` workflow, and
-`pypi` environment before publishing through this workflow.
+exact commit has successful CI and physical GPU validation runs on `main`, and
+that the tag matches `disimpy/_version.py`. It then repeats the fast simulator
+tests, builds and checks the distributions with Twine, publishes to PyPI
+through the `pypi` GitHub environment and PyPI Trusted Publishing, and uploads
+the same files as GitHub Release assets. Check PyPI's trusted publisher
+configuration for the `kerkelae/disimpy` repository,
+`.github/workflows/release.yml` workflow, and `pypi` environment before
+publishing through this workflow.
 
 Normal installations use the runtime dependencies declared in
 `pyproject.toml`. `requirements-dev.txt` installs the test and documentation

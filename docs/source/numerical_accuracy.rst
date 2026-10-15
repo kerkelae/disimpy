@@ -20,6 +20,19 @@ position. ``gradients.calc_b`` integrates the piecewise-linear waveform; its
 continuous value and finite-step signal attenuation need not agree on a coarse
 time grid.
 
+From v0.4, ``gradients.calc_b`` evaluates the exact integral of
+``|q(T) - q(t)|^2`` for the piecewise-linear gradient on these ``N - 1``
+intervals. In v0.3, it applied the trapezoidal rule to ``|q(t)|^2`` at the
+sample times. Even a rephased waveform can therefore receive a different
+b-value on a coarse grid: for samples ``[0, G, -G, 0]``, the old value is
+``0.50 * (gamma * G)^2 * dt^3`` and the new value is ``0.55`` times that scale.
+For a nonrephased two-sample waveform ``[G, G]``, the same change gives
+``0.50`` versus ``1/3`` times that scale; subtracting ``q(T)`` changes the
+convention as well as the integration rule.
+If you migrate saved gradients that were scaled with v0.3 ``set_b``, recompute
+their b-values with v0.4; use ``set_b`` again when the same target b-value is
+needed. The waveform amplitudes can change as a result.
+
 For a rephased free waveform, let ``q_j`` denote the q-vector at sample ``j``
 and ``q_T`` its final value. The exact normalized signal for the discrete walk
 is

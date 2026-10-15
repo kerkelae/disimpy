@@ -36,7 +36,7 @@ from ._cuda import (
     empty_xoroshiro128p_states,
 )
 from ._mesh import _classification_mesh_lookup, _mesh_sampling_grid
-from .gradients import GAMMA
+from .gradients import GAMMA, _validate_dt, _validate_gradient
 
 _MAX_CUDA_THREADS_PER_BLOCK = 1024
 _MAX_PHASE_COMPRESSION_ERROR_RAD = 1e-6
@@ -421,18 +421,8 @@ def simulation(
         or diffusivity <= 0
     ):
         raise ValueError("Incorrect value (%s) for diffusivity" % diffusivity)
-    if (
-        not isinstance(gradient, np.ndarray)
-        or gradient.ndim != 3
-        or gradient.shape[0] < 1
-        or gradient.shape[1] < 2
-        or gradient.shape[2] != 3
-        or not np.issubdtype(gradient.dtype, np.floating)
-        or not np.all(np.isfinite(gradient))
-    ):
-        raise ValueError("Incorrect value (%s) for gradient" % gradient)
-    if not isinstance(dt, float) or not np.isfinite(dt) or dt <= 0:
-        raise ValueError("Incorrect value (%s) for dt" % dt)
+    _validate_gradient(gradient)
+    _validate_dt(dt)
     if not isinstance(substrate, substrates._Substrate):
         raise ValueError("Incorrect value (%s) for substrate" % substrate)
     if not isinstance(seed, int) or seed < 0 or seed > np.iinfo(np.uint64).max:

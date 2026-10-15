@@ -1,0 +1,45 @@
+name: Physical GPU validation
+
+on:
+  workflow_dispatch:
+    inputs:
+      cuda-extra:
+        description: CUDA toolkit components to install on the GPU runner
+        type: choice
+        required: true
+        default: cuda12
+        options:
+          - cuda12
+          - cuda13
+
+permissions:
+  contents: read
+
+jobs:
+  full-gpu-suite:
+    if: github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, linux, x64, disimpy-gpu]
+    timeout-minutes: 180
+    env:
+      MPLBACKEND: Agg
+      CUDA_EXTRA: ${{ inputs['cuda-extra'] }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+      - name: Confirm physical NVIDIA GPU
+        run: nvidia-smi
+      - name: Install package and GPU test dependencies
+        run: python -m pip install ".[test,${CUDA_EXTRA}]"
+      - name: Confirm MLIR backend and usable GPU
+        run: |
+          env -u NUMBA_ENABLE_CUDASIM python - <<'PY'
+          from disimpy._cuda import IS_MLIR, cuda
+
+          if not IS_MLIR or not cuda.is_available():
+              raise SystemExit("Physical MLIR CUDA backend is unavailable")
+          print("Physical MLIR CUDA backend is available")
+          PY
+      - name: Run physical GPU and shared tests
+        run: env -u NUMBA_ENABLE_CUDASIM python -m pytest -q

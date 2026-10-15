@@ -44,6 +44,16 @@ jobs:
             echo "Release tag commit must have a successful CI push run on main" >&2
             exit 1
           fi
+
+          gpu_shas="$(gh api --method GET --paginate \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/gpu.yml/runs" \
+            -f head_sha="$tag_sha" -f branch=main -f event=workflow_dispatch \
+            -f status=success -f per_page=100 \
+            --jq '.workflow_runs[] | select(.head_branch == "main" and .event == "workflow_dispatch" and .conclusion == "success") | .head_sha')"
+          if ! grep -Fxq "$tag_sha" <<< "$gpu_shas"; then
+            echo "Release tag commit must have successful physical GPU validation on main" >&2
+            exit 1
+          fi
       - name: Check tag matches package version
         env:
           RELEASE_TAG: ${{ github.event.release.tag_name }}

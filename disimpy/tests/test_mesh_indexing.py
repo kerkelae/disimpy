@@ -401,6 +401,26 @@ def test_nonperiodic_compartment_sampling_uses_filtered_lookup():
     assert np.all(np.any((outside < 0.5) | (outside > 1.5), axis=1))
 
 
+def test_nested_shell_extra_sampling_reaches_inner_cavity():
+    outer_vertices, outer_faces = _mesh._aabb_to_mesh(np.full(3, 0.1), np.full(3, 0.9))
+    inner_vertices, inner_faces = _mesh._aabb_to_mesh(np.full(3, 0.3), np.full(3, 0.7))
+    substrate = substrates.mesh(
+        np.vstack((outer_vertices, inner_vertices)),
+        np.vstack((outer_faces, inner_faces + len(outer_vertices))),
+        periodic=False,
+        padding=np.full(3, 0.1),
+        init_pos="extra",
+        n_sv=np.array([5, 5, 5]),
+        quiet=True,
+    )
+    assert _mesh._mesh_sampling_grid(substrate, intra=False) is None
+    points = simulations._fill_mesh(80, substrate, intra=False, seed=613, cuda_bs=8)
+    in_cavity = np.all((points > 0.3) & (points < 0.7), axis=1)
+    outside_outer = np.any((points < 0.1) | (points > 0.9), axis=1)
+    assert np.any(in_cavity)
+    assert np.all(in_cavity | outside_outer)
+
+
 def test_periodic_seam_faces_do_not_change_compartment_parity():
     first_vertices, first_faces = _mesh._aabb_to_mesh(np.zeros(3), np.full(3, 0.4e-6))
     second_vertices, second_faces = _mesh._aabb_to_mesh(

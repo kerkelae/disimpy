@@ -36,11 +36,35 @@ class _Substrate:
             _PREPARED_MESH_ATTRIBUTES
         ):
             raise AttributeError(f"prepared mesh attribute '{name}' is read-only")
+        if self.__dict__.get("_mesh_prepared", False) and name == "init_pos":
+            if isinstance(value, np.ndarray):
+                if (
+                    value.ndim != 2
+                    or value.shape[1] != 3
+                    or not np.issubdtype(value.dtype, np.floating)
+                    or not np.all(np.isfinite(value))
+                    or np.any(value < 0)
+                    or np.any(value > self.voxel_size)
+                ):
+                    raise ValueError("Invalid mesh init_pos array for voxel")
+                value = np.array(value, copy=True, order="C")
+                value.flags.writeable = False
+            elif isinstance(value, str) and value in ("uniform", "intra", "extra"):
+                if value in ("intra", "extra"):
+                    _mesh._validate_closed_surface(
+                        self.vertices,
+                        self.faces[: self.n_membrane_faces],
+                        value,
+                    )
+            else:
+                raise ValueError(
+                    "Mesh init_pos must be an array, 'uniform', 'intra', or 'extra'"
+                )
         object.__setattr__(self, name, value)
 
     def __delattr__(self, name):
-        if self.__dict__.get("_mesh_prepared", False) and name in (
-            _PREPARED_MESH_ATTRIBUTES
+        if self.__dict__.get("_mesh_prepared", False) and (
+            name in _PREPARED_MESH_ATTRIBUTES or name == "init_pos"
         ):
             raise AttributeError(f"prepared mesh attribute '{name}' is read-only")
         object.__delattr__(self, name)
@@ -276,12 +300,13 @@ def mesh(
     into the returned object. Prepared arrays are read-only and their
     attributes cannot be replaced, keeping packed triangle data and subvoxel
     lookup coherent. The ``init_pos`` attribute can still be replaced between
-    simulations.
+    simulations; a replacement is validated, and arrays are copied.
 
     Before preparation, repeated indexed faces and coincident same-oriented
-    faces are reduced to their first occurrence, zero-area faces are removed,
-    and coincident opposite-oriented faces cancel. Coordinate coincidence for
-    this normalization requires exact equality.
+    faces are reduced to their first occurrence, and zero-area faces are
+    removed. Opposite-oriented coincident faces retain their first occurrence;
+    a redundant folded flap must be repaired explicitly in the input mesh.
+    Coordinate coincidence for this normalization requires exact equality.
 
     Compartment sampling checks that every geometric edge has two incident
     faces after vertices equal within floating-point roundoff are merged. It

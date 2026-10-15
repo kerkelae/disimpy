@@ -12,16 +12,13 @@ def _normalize_mesh_faces(vertices, faces):
 
     Repeated indexed faces retain their first occurrence. Faces with zero
     geometric area are removed. If distinct vertex indices refer to identical
-    coordinates, coincident faces with the same orientation retain their first
-    occurrence, while coincident faces with opposite orientations cancel.
+    coordinates, coincident faces retain their first occurrence regardless of
+    orientation. Redundant folded flaps must be repaired explicitly in the
+    input mesh: coordinate coincidence cannot distinguish them from physical
+    membranes.
     """
-    canonical_faces = np.sort(faces, axis=1)
-    _, first_face_indices = np.unique(canonical_faces, axis=0, return_index=True)
-    faces = faces[np.sort(first_face_indices)]
-
-    # Exact coordinate aliases occur in legacy STL conversions. Use them only
-    # to identify nonphysical faces; retaining the original vertex indices and
-    # order avoids perturbing otherwise valid geometry.
+    # Exact coordinate aliases occur in legacy STL conversions. Retain the
+    # first triangle's vertex indices and order when deduplicating them.
     _, coordinate_indices = np.unique(vertices, axis=0, return_inverse=True)
     coordinate_faces = coordinate_indices[faces]
     repeated_coordinate = np.any(
@@ -38,30 +35,10 @@ def _normalize_mesh_faces(vertices, faces):
     coordinate_faces = coordinate_faces[keep]
 
     canonical_coordinates = np.sort(coordinate_faces, axis=1)
-    _, coordinate_groups, group_counts = np.unique(
-        canonical_coordinates,
-        axis=0,
-        return_inverse=True,
-        return_counts=True,
+    _, first_coordinate_face_indices = np.unique(
+        canonical_coordinates, axis=0, return_index=True
     )
-    duplicate_groups = np.flatnonzero(group_counts > 1)
-    if duplicate_groups.size:
-        order = np.argsort(coordinate_faces, axis=1)
-        inversions = (
-            (order[:, 0] > order[:, 1]).astype(np.int8)
-            + (order[:, 0] > order[:, 2])
-            + (order[:, 1] > order[:, 2])
-        )
-        positive_orientation = inversions % 2 == 0
-        keep = np.ones(len(faces), dtype=bool)
-        for group in duplicate_groups:
-            members = np.flatnonzero(coordinate_groups == group)
-            orientations = positive_orientation[members]
-            if np.any(orientations) and np.any(~orientations):
-                keep[members] = False
-            else:
-                keep[members[1:]] = False
-        faces = faces[keep]
+    faces = faces[np.sort(first_coordinate_face_indices)]
 
     if not len(faces):
         raise ValueError("faces contains no surface after normalization")
@@ -563,14 +540,16 @@ def _mesh_sampling_grid(substrate, intra=True, max_bytes=_SAMPLING_GRID_MAX_BYTE
 
     The grid is independent of the collision subvoxels. All membrane AABB
     cells are retained. For inside sampling, all untouched cells not reachable
-    from the voxel boundary are also retained. For outside sampling the
-    reachable cells are retained instead. The latter assumes no nested closed
-    shells; outside sampling on sparse meshes returns ``None`` to keep the
-    existing whole-voxel proposal without grid setup. The GPU parity classifier
-    always makes the final decision. ``max_bytes`` bounds dense scratch space.
+    from the voxel boundary are also retained. Outside sampling uses the
+    whole-voxel proposal: an untouched cell cut off from the boundary may be
+    an outside cavity between nested shells or across a narrow passage. The
+    GPU parity classifier always makes the final decision. ``max_bytes``
+    bounds dense scratch space.
     """
     if not isinstance(max_bytes, int) or max_bytes < 32:
         raise ValueError("max_bytes must be an integer of at least 32")
+    if not intra:
+        return None
     max_cells = min(max_bytes // 32, np.iinfo(np.int32).max)
     voxel_size = np.asarray(substrate.voxel_size, dtype=np.float64)
     area, volume = _sampling_surface_scale(
@@ -579,13 +558,9 @@ def _mesh_sampling_grid(substrate, intra=True, max_bytes=_SAMPLING_GRID_MAX_BYTE
         substrate.n_membrane_faces,
         voxel_size / 2,
     )
-    voxel_volume = float(np.prod(voxel_size))
-    if not intra and volume < voxel_volume / 2:
-        return None
-    target_volume = volume if intra else max(0.0, voxel_volume - volume)
     # 4V/A is the diameter of a long cylinder. It chooses a physical mesh
     # scale without using the separate collision-grid resolution as a knob.
-    width = 4 * target_volume / area if area > 0 else 0.0
+    width = 4 * volume / area if area > 0 else 0.0
     if not np.isfinite(width) or width <= 0:
         width = min(voxel_size)
     # Keep the initial integer shape safely bounded even for meshes whose
@@ -622,7 +597,7 @@ def _mesh_sampling_grid(substrate, intra=True, max_bytes=_SAMPLING_GRID_MAX_BYTE
         mask,
     )
     _mark_sampling_exterior(shape, mask)
-    cell_ids = np.flatnonzero(mask != (2 if intra else 0)).astype(np.int32)
+    cell_ids = np.flatnonzero(mask != 2).astype(np.int32)
     return cell_ids, shape, cell_size
 
 

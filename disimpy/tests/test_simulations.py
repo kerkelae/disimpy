@@ -405,7 +405,9 @@ def test_mesh_diffusion():
         )
         with open(mesh_path, "rb") as f:
             example_mesh = pickle.load(f)
-        faces = example_mesh["faces"]
+        # The legacy fixture has a known two-face folded flap. Repair it
+        # explicitly so generic normalization preserves real membranes.
+        faces = np.delete(example_mesh["faces"], [2432, 2444], axis=0)
         vertices = example_mesh["vertices"]
         substrate = substrates.mesh(vertices, faces, init_pos="intra", periodic=True)
         signals, pos = simulations.simulation(

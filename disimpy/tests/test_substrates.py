@@ -249,6 +249,47 @@ def test_mesh_deduplicates_faces_stably_before_preparation():
     npt.assert_array_equal(substrate.triangle_indices, np.arange(len(faces)))
 
 
+def test_mesh_keeps_reversed_coincident_membrane_with_coordinate_aliases():
+    triangle = np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 1.0]])
+    indexed = substrates.mesh(
+        triangle,
+        np.array([[0, 1, 2], [2, 1, 0]]),
+        periodic=True,
+        padding=np.full(3, 0.1),
+        quiet=True,
+    )
+    aliased = substrates.mesh(
+        np.vstack((triangle, triangle)),
+        np.array([[0, 1, 2], [5, 4, 3]]),
+        periodic=True,
+        padding=np.full(3, 0.1),
+        quiet=True,
+    )
+    assert indexed.n_membrane_faces == aliased.n_membrane_faces == 1
+    npt.assert_array_equal(indexed.triangle_data, aliased.triangle_data)
+
+
+def test_adjacent_compartments_keep_shared_membrane_faces():
+    left_vertices, left_faces = _mesh._aabb_to_mesh(
+        np.zeros(3), np.array([0.5, 1.0, 1.0])
+    )
+    right_vertices, right_faces = _mesh._aabb_to_mesh(
+        np.array([0.5, 0.0, 0.0]), np.ones(3)
+    )
+    substrate = substrates.mesh(
+        np.vstack((left_vertices, right_vertices)),
+        np.vstack((left_faces, right_faces + len(left_vertices))),
+        periodic=True,
+        padding=np.full(3, 0.1),
+        quiet=True,
+    )
+    # Each shared-plane triangle is present twice with opposite winding and
+    # aliased indices; retain one copy of each to preserve the barrier.
+    assert substrate.n_membrane_faces == 22
+    face_x = substrate.vertices[substrate.faces, 0]
+    assert np.count_nonzero(np.all(face_x == 0.6, axis=1)) == 2
+
+
 def test_mesh_normalizes_legacy_neuron_face_artifacts():
     mesh_path = os.path.join(
         os.path.dirname(substrates.__file__), "tests", "neuron-model.pkl"
@@ -256,17 +297,29 @@ def test_mesh_normalizes_legacy_neuron_face_artifacts():
     with open(mesh_path, "rb") as f:
         neuron = pickle.load(f)
 
+    # This fixture contains a folded, zero-volume flap made of two opposite
+    # faces. Removing it is an explicit input repair: automatic removal would
+    # also erase a real membrane between adjacent compartments.
+    with pytest.raises(ValueError, match="watertight mesh"):
+        substrates.mesh(
+            neuron["vertices"],
+            neuron["faces"],
+            periodic=True,
+            init_pos="intra",
+            n_sv=np.ones(3, dtype=int),
+            quiet=True,
+        )
+    repaired_faces = np.delete(neuron["faces"], [2432, 2444], axis=0)
     substrate = substrates.mesh(
         neuron["vertices"],
-        neuron["faces"],
+        repaired_faces,
         periodic=True,
         init_pos="intra",
         n_sv=np.ones(3, dtype=int),
         quiet=True,
     )
 
-    # One indexed duplicate, 13 remaining zero-area faces, and one pair of
-    # coincident opposite-facing triangles are absent from prepared geometry.
+    # One indexed duplicate and 13 remaining zero-area faces are normalized.
     assert substrate.n_membrane_faces == 29672
     assert len(substrate.faces) == 29672
     assert np.all(np.isfinite(substrate.triangle_data))
@@ -548,6 +601,35 @@ def test_mesh_owns_and_write_protects_prepared_arrays():
 
     # Initial-position policy may still be changed between simulations.
     substrate.init_pos = "uniform"
+    assert substrate.init_pos == "uniform"
+
+    replacement = np.array([[0.3, 0.3, 0.3]])
+    substrate.init_pos = replacement
+    replacement[:] = 0.8
+    npt.assert_array_equal(substrate.init_pos, np.array([[0.3, 0.3, 0.3]]))
+    assert not substrate.init_pos.flags.writeable
+    with pytest.raises(AttributeError, match="read-only"):
+        del substrate.init_pos
+    for invalid in (np.array([[np.nan, 0.0, 0.0]]), np.array([[2.0, 0, 0]])):
+        old_initial = substrate.init_pos
+        with pytest.raises(ValueError, match="init_pos"):
+            substrate.init_pos = invalid
+        assert substrate.init_pos is old_initial
+
+
+@pytest.mark.parametrize("compartment", ["intra", "extra"])
+def test_changing_mesh_initial_compartment_rechecks_closed_surface(compartment):
+    vertices, faces = _tetrahedron()
+    substrate = substrates.mesh(
+        vertices,
+        faces[:-1],
+        periodic=True,
+        init_pos="uniform",
+        n_sv=np.ones(3, dtype=int),
+        quiet=True,
+    )
+    with pytest.raises(ValueError, match="watertight mesh"):
+        substrate.init_pos = compartment
     assert substrate.init_pos == "uniform"
 
 

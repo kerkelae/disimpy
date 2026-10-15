@@ -130,14 +130,7 @@ def test_memory_cap_and_extra_proposal_policy():
     assert ids.dtype == np.int32
     assert _mesh_sampling_grid(sparse, intra=False) is None
 
-    large_vertices, large_faces = _box([0.05] * 3, [0.95] * 3)
-    large = SimpleNamespace(
-        vertices=large_vertices,
-        faces=large_faces,
-        n_membrane_faces=len(large_faces),
-        voxel_size=np.ones(3),
-    )
-    outside_ids, outside_shape, outside_size = _mesh_sampling_grid(large, intra=False)
-    outside_cover = set(outside_ids.tolist())
-    assert _cell_of([0.01] * 3, outside_shape, outside_size) in outside_cover
-    assert _cell_of([0.5] * 3, outside_shape, outside_size) not in outside_cover
+    # Flooding only from the voxel boundary excludes the inner cavity here,
+    # despite that cavity being outside both closed shells by parity.
+    nested = _two_boxes([0.05] * 3, [0.95] * 3, [0.25] * 3, [0.75] * 3)
+    assert _mesh_sampling_grid(nested, intra=False) is None

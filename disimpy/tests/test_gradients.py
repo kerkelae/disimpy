@@ -6,7 +6,7 @@ import numpy as np
 import numpy.testing as npt
 import pytest
 
-from .. import gradients, utils
+from .. import gradients, simulations, utils
 
 
 def example_gradient():
@@ -52,6 +52,22 @@ def test_gradient_helpers_reject_invalid_dt(dt):
     gradient, _ = example_gradient()
     with pytest.raises(ValueError, match="dt"):
         gradients.calc_q(gradient, dt)
+
+
+def test_gradient_time_step_accepts_numpy_floating():
+    gradient, _ = example_gradient()
+    npt.assert_allclose(
+        gradients.calc_q(gradient, np.float32(1e-3)),
+        gradients.calc_q(gradient, float(np.float32(1e-3))),
+    )
+
+
+def test_simulation_accepts_same_numpy_floating_time_step():
+    gradient = np.zeros((1, 2, 3))
+    # The deliberately invalid substrate stops before any GPU setup. The
+    # substrate error confirms that the NumPy float passed dt validation.
+    with pytest.raises(ValueError, match="substrate"):
+        simulations.simulation(1, 2e-9, gradient, np.float32(1e-3), None)
 
 
 @pytest.mark.parametrize("n_t", [0, 1, 2.5])
@@ -205,6 +221,24 @@ def test_pgse_scalar_bvalue_and_antiparallel_direction():
     npt.assert_equal(gradient.shape, (1, 256, 3))
     npt.assert_allclose(gradients.calc_b(gradient, dt), [bvalue], rtol=1e-12)
     npt.assert_allclose(gradient[0, 1, 0], -np.linalg.norm(gradient[0, 1]), atol=1e-14)
+
+
+@pytest.mark.parametrize("n_t", [256, 257])
+def test_pgse_touching_pulses_without_reference_array(monkeypatch, n_t):
+    original_zeros = np.zeros
+
+    def bounded_zeros(shape, *args, **kwargs):
+        if np.prod(shape) > 100_000:
+            raise AssertionError("pgse allocated its former million-sample array")
+        return original_zeros(shape, *args, **kwargs)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(gradients.np, "zeros", bounded_zeros)
+        gradient, dt = gradients.pgse(15e-3, 15e-3, n_t, 1e9, [1, 0, 0])
+
+    npt.assert_equal(gradient.shape, (1, n_t, 3))
+    npt.assert_allclose(gradient[0, :, 0], -gradient[0, ::-1, 0], atol=1e-10)
+    npt.assert_allclose(gradients.calc_b(gradient, dt), [1e9], rtol=1e-12)
 
 
 def test_pgse_b0_zero_direction_and_mixed_measurements():

@@ -3,15 +3,13 @@
 import os
 import pickle
 
+import matplotlib.pyplot as plt
 import numpy as np
 import numpy.testing as npt
-import matplotlib.pyplot as plt
 import pytest
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
-
 from .. import _mesh, substrates
-
 
 SEED = 123
 

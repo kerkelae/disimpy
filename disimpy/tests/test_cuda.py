@@ -8,8 +8,7 @@ import pytest
 from scipy.stats import normaltest
 
 from .. import _cuda
-from .._cuda import cuda
-from .._cuda import create_xoroshiro128p_states
+from .._cuda import create_xoroshiro128p_states, cuda
 
 SEED = 123
 pytestmark = pytest.mark.gpu

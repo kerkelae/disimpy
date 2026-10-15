@@ -5,13 +5,16 @@ import pytest
 
 from .. import simulations, substrates
 from .._cuda import (
+    _RNG_STATE_DTYPE,
+    IS_MLIR,
     _cuda_fused_free_large_phase,
     _cuda_fused_free_small_phase,
     _cuda_fused_sphere_small_phase,
+    _cuda_step_free,
+    _cuda_step_sphere,
+    cuda,
+    empty_xoroshiro128p_states,
 )
-from .._cuda import _cuda_step_free, _cuda_step_sphere
-from .._cuda import IS_MLIR, cuda
-from .._cuda import _RNG_STATE_DTYPE, empty_xoroshiro128p_states
 
 
 def _splitmix_states(n, seed):

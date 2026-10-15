@@ -27,6 +27,7 @@ cuda13 = ["numba-cuda-mlir[cu13]==0.5.4"]
 
 [project.urls]
 Homepage = "https://github.com/kerkelae/disimpy"
+Documentation = "https://disimpy.readthedocs.io/"
 
 [tool.setuptools.dynamic]
 version = {attr = "disimpy._version.__version__"}
@@ -36,3 +37,6 @@ include = ["disimpy*"]
 
 [tool.setuptools.package-data]
 "disimpy.tests" = ["*.txt", "*.npy", "*.pkl", "*.stl", "*.scheme"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]

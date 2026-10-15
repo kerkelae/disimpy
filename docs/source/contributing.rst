@@ -45,21 +45,32 @@ pull requests
 proposing-changes-to-your-work-with-pull-requests/creating-a-pull-request-from-
 a-fork>`_.
 
-.. tip::
+Development environment
+#######################
 
-   When making changes to the code, it is recommended to use the `conda
-   environment
-   <https://conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html#creating-an-environment-from-an-environment-yml-file>`_
-   in the file ``development_environment.yml`` and to install the package in
-   editable mode with test, documentation, and CUDA Toolkit dependencies from
-   the repository root:
+Use a virtual environment for development. The provided Conda environment
+selects Python 3.11; other supported Python versions also work:
 
-   .. code-block::
+.. code-block:: console
 
-        pip install -e ".[test,docs,cuda13]"
+   conda env create -f development_environment.yml
+   conda activate disimpy
+   python -m pip install -r requirements-dev.txt
 
-   Use ``cuda12`` for CUDA 12. The fast simulator tests need only
-   ``.[test,docs]``.
+Run these commands from the repository root. ``requirements-dev.txt`` installs
+Disimpy in editable mode with its test and documentation extras, plus Ruff,
+build, and Twine. These tools are separate from the package's runtime
+requirements. The fast CPU and CUDA simulator tests do not need a CUDA Toolkit
+or NVIDIA driver.
+
+For physical GPU simulations, install the CUDA Toolkit components for your
+target version as well:
+
+.. code-block:: console
+
+   python -m pip install -e '.[cuda13]'
+
+Use ``cuda12`` in place of ``cuda13`` when targeting CUDA 12.
 
 Code style
 ##########
@@ -100,16 +111,8 @@ The generated HTML is in ``docs/_build/html``.
 Releasing
 #########
 
-Before publishing, run the full numerical suite on a physical GPU, review
-the Python matrix in GitHub Actions, and inspect the installed wheel and
-source distribution. The version in ``disimpy/_version.py`` must match the
-reviewed Git tag with a ``v`` prefix, for example ``v0.4.0rc1``.
-
-The ``release.yml`` workflow runs the fast suite on Python 3.11–3.14, builds
-the distributions, and checks their metadata. Publishing a GitHub release
-from that tag then publishes the same distributions to PyPI through a
-`trusted publisher <https://docs.pypi.org/trusted-publishers/using-a-publisher/>`_
-and attaches them to the GitHub release. Configure the PyPI trusted publisher
-for the ``kerkelae/disimpy`` repository, ``release.yml`` workflow, and
-``pypi`` environment before publishing the first release. Review the tag and
-artifacts before publishing the GitHub release.
+Follow the `release guide
+<https://github.com/kerkelae/disimpy/blob/main/RELEASING.md>`_ for version and
+tag rules, physical GPU validation, the exact-commit ``main`` CI gate, and
+PyPI publishing. Review the release notes and artifacts before publishing the
+GitHub Release.

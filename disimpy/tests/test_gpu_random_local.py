@@ -3,19 +3,18 @@
 import numpy as np
 import pytest
 
-from .._cuda import IS_MLIR, cuda
 from .._cuda import (
-    create_xoroshiro128p_states,
-    derive_seed,
-    xoroshiro128p_uniform_float64,
-    xoroshiro128p_unit_sphere_float64,
-)
-from .._cuda import (
+    IS_MLIR,
     create_local_xoroshiro128p_states,
+    create_xoroshiro128p_states,
+    cuda,
+    derive_seed,
     empty_xoroshiro128p_states,
     load_local_rng,
     store_local_rng,
+    xoroshiro128p_uniform_float64,
     xoroshiro128p_uniform_local_float64,
+    xoroshiro128p_unit_sphere_float64,
     xoroshiro128p_unit_sphere_local_float64,
 )
 

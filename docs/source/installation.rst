@@ -31,17 +31,19 @@ Use a virtual environment. Install a release with pip:
    python -m pip install disimpy
 
 For development and CPU simulator tests from a source checkout, create the
-portable Conda environment and install the test dependencies. A CUDA Toolkit
-and NVIDIA driver are not needed for these tests:
+portable Conda environment and install the development requirements. This
+installs Disimpy in editable mode, its test and documentation extras, and the
+Ruff, build, and Twine tools. A CUDA Toolkit and NVIDIA driver are not needed
+for these tests:
 
 .. code-block:: console
 
    conda env create -f development_environment.yml
    conda activate disimpy
-   python -m pip install -e '.[test]'
+   python -m pip install -r requirements-dev.txt
 
 For physical GPU simulations, install the appropriate CUDA Toolkit components
-as well: ``python -m pip install -e '.[test,cuda13]'`` or use ``cuda12`` when
+as well: ``python -m pip install -e '.[cuda13]'`` or use ``cuda12`` when
 targeting CUDA 12.
 
 Alternatively, install directly from GitHub:

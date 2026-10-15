@@ -1,43 +1,42 @@
 """This module contains code for running diffusion-weighted MR simulations."""
 
+import contextlib
+import math
 import os
 import sys
-import math
-import contextlib
 
 import numpy as np
 
-from . import utils, substrates
+from . import substrates, utils
 from ._cuda import (
-    cuda,
-    create_xoroshiro128p_states,
-    create_local_xoroshiro128p_states,
-    derive_seed,
-    empty_xoroshiro128p_states,
-    _device_initial_positions,
-    _reduce_phases,
-    _phase_error_upper_bound,
-    _shared_waveform_basis,
+    _cuda_compact_mesh_candidates,
+    _cuda_copy_rng_states,
+    _cuda_fill_mesh,
     _cuda_fill_mesh_cover,
-    _TrajectoryRecorder,
     _cuda_fused_free_large_phase,
     _cuda_fused_free_small_phase,
     _cuda_fused_local_analytic_small_phase,
     _cuda_fused_mesh_small_phase,
     _cuda_fused_sphere_small_phase,
+    _cuda_prefix_mesh_block_counts,
     _cuda_step_cylinder_local,
     _cuda_step_ellipsoid_local,
-    _cuda_copy_rng_states,
-    _cuda_fill_mesh,
-    _cuda_prefix_mesh_block_counts,
-    _cuda_compact_mesh_candidates,
     _cuda_step_free,
-    _cuda_step_sphere,
     _cuda_step_mesh,
+    _cuda_step_sphere,
+    _device_initial_positions,
+    _phase_error_upper_bound,
+    _reduce_phases,
+    _shared_waveform_basis,
+    _TrajectoryRecorder,
+    create_local_xoroshiro128p_states,
+    create_xoroshiro128p_states,
+    cuda,
+    derive_seed,
+    empty_xoroshiro128p_states,
 )
 from ._mesh import _classification_mesh_lookup, _mesh_sampling_grid
 from .gradients import GAMMA
-
 
 _MAX_CUDA_THREADS_PER_BLOCK = 1024
 _MAX_PHASE_COMPRESSION_ERROR_RAD = 1e-6

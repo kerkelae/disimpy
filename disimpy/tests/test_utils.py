@@ -5,7 +5,6 @@ import numpy.testing as npt
 
 from .. import utils
 
-
 SEED = 123
 
 

@@ -3,8 +3,7 @@
 import numpy as np
 import pytest
 
-from .._cuda import _device_initial_positions
-from .._cuda import IS_MLIR, cuda
+from .._cuda import IS_MLIR, _device_initial_positions, cuda
 
 
 @pytest.mark.skipif(IS_MLIR and not cuda.is_available(), reason="requires CUDA GPU")

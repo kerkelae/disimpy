@@ -9,7 +9,6 @@ import pytest
 
 from .. import _cuda, _mesh, simulations, substrates
 
-
 pytestmark = pytest.mark.skipif(
     os.environ.get("NUMBA_ENABLE_CUDASIM") != "1",
     reason="requires NUMBA_ENABLE_CUDASIM=1 before import",

@@ -7,7 +7,6 @@ import pytest
 
 from .. import simulations, substrates
 
-
 pytestmark = pytest.mark.skipif(
     os.environ.get("NUMBA_ENABLE_CUDASIM") != "1",
     reason="requires NUMBA_ENABLE_CUDASIM=1 before import",

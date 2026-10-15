@@ -5,34 +5,45 @@ on:
     types: [published]
 
 permissions:
+  actions: read
   contents: read
 
 jobs:
-  test:
+  verify:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.11", "3.12", "3.13", "3.14"]
-    env:
-      NUMBA_ENABLE_CUDASIM: "1"
-      MPLBACKEND: Agg
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
         with:
-          python-version: ${{ matrix.python-version }}
-      - run: python -m pip install ".[test]"
-      - run: python -m pytest -m "not gpu"
-
-  build:
-    needs: test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
+          ref: ${{ github.event.release.tag_name }}
+          fetch-depth: 0
       - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
+      - name: Check release provenance
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          tag_sha="$(git rev-parse --verify "refs/tags/${RELEASE_TAG}^{commit}")"
+          if [[ "$tag_sha" != "$GITHUB_SHA" ]]; then
+            echo "Release tag no longer points to the published release commit" >&2
+            exit 1
+          fi
+          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+          if ! git merge-base --is-ancestor "$tag_sha" origin/main; then
+            echo "Release tag must point to a commit on main" >&2
+            exit 1
+          fi
+
+          ci_shas="$(gh api --method GET --paginate \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs" \
+            -f head_sha="$tag_sha" -f branch=main -f event=push \
+            -f status=success -f per_page=100 \
+            --jq '.workflow_runs[] | select(.head_branch == "main" and .event == "push" and .conclusion == "success") | .head_sha')"
+          if ! grep -Fxq "$tag_sha" <<< "$ci_shas"; then
+            echo "Release tag commit must have a successful CI push run on main" >&2
+            exit 1
+          fi
       - name: Check tag matches package version
         env:
           RELEASE_TAG: ${{ github.event.release.tag_name }}
@@ -49,6 +60,37 @@ jobs:
               raise SystemExit(f"Release tag {tag!r} does not match a release version {version!r}")
           print(f"Building {tag}")
           PY
+
+  test:
+    needs: verify
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
+    env:
+      NUMBA_ENABLE_CUDASIM: "1"
+      MPLBACKEND: Agg
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m pip install ".[test]"
+      - run: python -m pytest -m "not gpu"
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
       - run: python -m pip install build twine
       - run: python -m build
       - run: python -m twine check dist/*

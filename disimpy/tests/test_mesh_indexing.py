@@ -8,9 +8,9 @@ import numpy as np
 import pytest
 
 from .. import _cuda, _mesh, simulations, substrates
-from .._cuda import cuda
 from .._cuda import (
     create_xoroshiro128p_states,
+    cuda,
     xoroshiro128p_uniform_float64,
 )
 

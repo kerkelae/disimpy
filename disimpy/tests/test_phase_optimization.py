@@ -4,9 +4,13 @@ import numpy as np
 import pytest
 
 from .. import simulations, substrates
-from .._cuda import IS_MLIR, cuda
-from .._cuda import _phase_error_upper_bound, _shared_waveform_basis
-from .._cuda import _reduce_phases
+from .._cuda import (
+    IS_MLIR,
+    _phase_error_upper_bound,
+    _reduce_phases,
+    _shared_waveform_basis,
+    cuda,
+)
 
 
 def _gradient():
